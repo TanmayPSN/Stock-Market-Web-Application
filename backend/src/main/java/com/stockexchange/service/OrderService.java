@@ -303,4 +303,12 @@ public class OrderService {
                 .executedAt(order.getExecutedAt())
                 .build();
     }
+
+    public List<OrderResponse> getOrdersByUser(User user) {
+        // Used by AdminController to view a specific user's orders.
+        return orderRepository.findByUserOrderByPlacedAtDesc(user)
+                .stream()
+                .map(this::toOrderResponse)
+                .toList();
+    }
 }
