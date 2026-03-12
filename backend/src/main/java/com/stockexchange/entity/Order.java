@@ -4,12 +4,18 @@ import com.stockexchange.enums.OrderSide;
 import com.stockexchange.enums.OrderStatus;
 import com.stockexchange.enums.OrderType;
 import jakarta.persistence.*;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "orders")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Order {
 
     @Id
