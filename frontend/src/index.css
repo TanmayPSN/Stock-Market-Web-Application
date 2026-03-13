@@ -24,6 +24,14 @@
   --loss:             #ff4757;
   --loss-dim:         #ff475722;
 
+  --gain-dim:          rgba(0, 230, 118, 0.1);
+  --loss-dim:          rgba(255, 71, 87, 0.1);
+  --accent-cyan-dim:   rgba(0, 212, 255, 0.1);
+  --accent-amber-dim:  rgba(245, 166, 35, 0.1);
+  --border-accent:     rgba(0, 212, 255, 0.3);
+  --shadow-glow-cyan:  0 0 20px rgba(0, 212, 255, 0.15);
+  --transition-slow:   all 0.4s ease;
+
   --shadow-card:      0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-glow-cyan: 0 0 20px rgba(0, 212, 255, 0.15);
   --shadow-glow-amber:0 0 20px rgba(245, 166, 35, 0.15);
@@ -186,6 +194,26 @@ h1, h2, h3, h4, h5 {
   color:        var(--accent-cyan);
   background:   var(--accent-cyan-dim);
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes flash-green {
+  0%   { background: transparent; }
+  30%  { background: var(--gain-dim); }
+  100% { background: transparent; }
+}
+
+@keyframes flash-red {
+  0%   { background: transparent; }
+  30%  { background: var(--loss-dim); }
+  100% { background: transparent; }
+}
+
+.flash-green { animation: flash-green 0.6s ease; }
+.flash-red   { animation: flash-red   0.6s ease; }
 
 .badge {
   display:       inline-flex;
