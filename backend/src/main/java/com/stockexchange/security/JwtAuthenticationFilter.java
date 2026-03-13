@@ -1,3 +1,4 @@
+
 package com.stockexchange.security;
 
 import jakarta.servlet.FilterChain;
@@ -67,7 +68,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
         } catch (Exception e) {
-            log.error("=== JWT FILTER === Exception: {}", e.getMessage(), e);
+            log.error("=== JWT FILTER === Exception type: {}",
+                    e.getClass().getName());
+            log.error("=== JWT FILTER === Exception message: {}",
+                    e.getMessage());
+            log.error("=== JWT FILTER === Stack trace: ", e);
         }
 
         filterChain.doFilter(request, response);
