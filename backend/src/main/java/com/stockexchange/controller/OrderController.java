@@ -21,7 +21,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping("/place")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAuthority('ROLE_USER')")
     // Only authenticated users can place orders.
     // OrderService internally validates:
     // market open, balance, shares available, margin limits.
@@ -42,7 +42,7 @@ public class OrderController {
     }
 
     @GetMapping("/my")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAuthority('ROLE_USER')")
     // Returns all orders placed by the logged-in user.
     // Used for the order history tab on the dashboard.
     public ResponseEntity<List<OrderResponse>> getMyOrders() {
@@ -50,7 +50,7 @@ public class OrderController {
     }
 
     @GetMapping("/my/pending")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAuthority('ROLE_USER')")
     // Returns only PENDING limit orders for the logged-in user.
     // Used to show active limit orders that can be cancelled.
     public ResponseEntity<List<OrderResponse>> getMyPendingOrders() {
@@ -58,7 +58,7 @@ public class OrderController {
     }
 
     @PutMapping("/{orderId}/cancel")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAuthority('ROLE_USER')")
     // User cancels their own pending limit order.
     // OrderService validates the order belongs to this user
     // and is still in PENDING status before cancelling.
@@ -68,7 +68,7 @@ public class OrderController {
     }
 
     @PutMapping("/cancel-all-pending")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     // Admin cancels all pending orders — called at market close.
     // Also triggered automatically by MarketHoursService
     // but exposed here for manual admin override.

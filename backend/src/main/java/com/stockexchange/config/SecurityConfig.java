@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -59,6 +60,9 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                                // ── Allow ALL preflight OPTIONS requests ──
+                                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                                 // ── Public endpoints — no token required ──
                                 .requestMatchers("/api/auth/**").permitAll()
                                 // Login and register endpoints are open to everyone.
@@ -73,7 +77,7 @@ public class SecurityConfig {
                                 // WebSocket handshake endpoint must be public.
 
                                 // ── Admin only endpoints ──
-                                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                                 // All /api/admin/** routes require ROLE_ADMIN.
                                 // hasRole("ADMIN") automatically checks for "ROLE_ADMIN".
 
@@ -111,6 +115,8 @@ public class SecurityConfig {
 
         config.setAllowCredentials(true);
         // Required when frontend sends cookies or Authorization headers.
+
+        config.setMaxAge(3600L); // ← add this — caches preflight for 1 hou
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

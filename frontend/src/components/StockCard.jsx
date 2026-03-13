@@ -101,7 +101,7 @@ export default function StockCard({
       </div>
 
       {/* ── Action buttons ── */}
-      {!stock.isActive
+      {(stock.isActive === false || stock.active === false)
         ? (
           <div style={s.delistedBanner}>
             Delisted — trading suspended
