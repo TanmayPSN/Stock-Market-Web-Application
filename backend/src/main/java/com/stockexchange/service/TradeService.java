@@ -4,6 +4,7 @@ import com.stockexchange.dto.response.TradeResponse;
 import com.stockexchange.entity.*;
 import com.stockexchange.enums.OrderSide;
 import com.stockexchange.enums.OrderStatus;
+import com.stockexchange.enums.OrderType;
 import com.stockexchange.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,11 +48,13 @@ public class TradeService {
                 .multiply(BigDecimal.valueOf(qty));
 
         // ── Buyer side ──
-        if (buyOrder.isMarginOrder()) {
-            marginService.allocateMargin(buyer, tradeValue);
-        } else {
-            buyer.setBalance(buyer.getBalance().subtract(tradeValue));
-            userRepository.save(buyer);
+        if (buyOrder.getType() == OrderType.MARKET) {
+            if (buyOrder.isMarginOrder()) {
+                marginService.allocateMargin(buyer, tradeValue);
+            } else {
+                buyer.setBalance(buyer.getBalance().subtract(tradeValue));
+                userRepository.save(buyer);
+            }
         }
         portfolioService.updateHoldingOnBuy(
                 buyer, stock, qty, executedPrice,
@@ -150,16 +153,15 @@ public class TradeService {
                                    int qty, BigDecimal executedPrice,
                                    BigDecimal tradeValue) {
 
-        log.info("=== MARGIN DEBUG === isMarginOrder: {}", order.isMarginOrder());
-        log.info("=== MARGIN DEBUG === order id: {}", order.getId());
-
-        // Step 1 — Deduct balance or margin
-        if (order.isMarginOrder()) {
-            marginService.allocateMargin(user, tradeValue);
-            // Margin service handles balance + margin split.
-        } else {
-            user.setBalance(user.getBalance().subtract(tradeValue));
-            userRepository.save(user);
+        // Step 1 — Deduct balance only for MARKET orders.
+        // LIMIT orders already had the full amount deducted upfront at placement.
+        if (order.getType() == OrderType.MARKET) {
+            if (order.isMarginOrder()) {
+                marginService.allocateMargin(user, tradeValue);
+            } else {
+                user.setBalance(user.getBalance().subtract(tradeValue));
+                userRepository.save(user);
+            }
         }
 
         // Step 2 — Reduce available shares in the stock
@@ -168,13 +170,13 @@ public class TradeService {
         stockRepository.save(stock);
 
         // Step 3 — Update portfolio holding
-        portfolioService.updateHoldingOnBuy(user, stock, qty, executedPrice, order.isMarginOrder());
+        portfolioService.updateHoldingOnBuy(user, stock, qty,
+                executedPrice, order.isMarginOrder());
 
         // Step 4 — Update order status
         updateOrderAsExecuted(order, executedPrice, tradeValue);
 
         // Step 5 — Create trade record
-        // For buy orders, the system acts as the seller (exchange).
         Trade trade = buildTrade(order, user, null,
                 stock, qty, executedPrice, tradeValue);
         tradeRepository.save(trade);

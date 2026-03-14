@@ -96,20 +96,29 @@ public class OrderService {
             }
         }
 
+        // ── OPTION 1: Deduct full amount upfront for LIMIT orders ──
+        if (request.getType() == OrderType.LIMIT) {
+            if (request.isUseMargin()) {
+                marginService.allocateMargin(user, totalCost);
+            } else {
+                user.setBalance(user.getBalance().subtract(totalCost));
+                userRepository.save(user);
+            }
+            log.info("Upfront deduction of {} for LIMIT BUY order by {}",
+                    totalCost, user.getUsername());
+        }
+
         Order order = buildOrder(user, stock, request);
         Order savedOrder = orderRepository.save(order);
 
         if (request.getType() == OrderType.MARKET) {
-            // Step 1 — try user-to-user matching first
             matchingEngine.tryMatchOrder(savedOrder, stock.getCurrentPrice());
 
-            // Step 2 — reload to check remaining quantity after matching
             Order reloaded = orderRepository.findById(savedOrder.getId())
                     .orElseThrow();
             int remaining = reloaded.getQuantity()
                     - reloaded.getFilledQuantity();
 
-            // Step 3 — exchange fills whatever is left
             if (remaining > 0) {
                 tradeService.executeTrade(reloaded, stock.getCurrentPrice());
             }
