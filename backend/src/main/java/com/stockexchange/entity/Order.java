@@ -82,6 +82,13 @@ public class Order {
     // Whether this order was placed using margin trading.
     // If true, the MarginAccount is involved in settling this trade.
 
+    @Column(nullable = false)
+    private Integer filledQuantity = 0;
+    // How many shares have been filled so far.
+    // For a full fill: filledQuantity == quantity
+    // For a partial fill: filledQuantity < quantity
+    // remainingQuantity = quantity - filledQuantity
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime placedAt;
     // When the user submitted the order.

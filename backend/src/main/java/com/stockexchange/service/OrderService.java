@@ -27,7 +27,9 @@ public class OrderService {
     private final StockRepository            stockRepository;
     private final PortfolioRepository        portfolioRepository;
     private final PortfolioHoldingRepository holdingRepository;
+    private final MarginAccountRepository    marginAccountRepository;
     private final MarketHoursService         marketHoursService;
+    private final MatchingEngineService      matchingEngine;
     private final MarginService              marginService;
     private final TradeService               tradeService;
 
@@ -41,19 +43,16 @@ public class OrderService {
                 .orElseThrow(() -> new RuntimeException(
                         "Stock not found: " + request.getTicker()));
 
-        // Step 1 — Market open check
         if (!marketHoursService.isMarketOpen()) {
             return rejectOrder(user, stock, request,
                     "Order Rejected: Market is closed");
         }
 
-        // Step 2 — Stock active check
         if (!stock.isActive()) {
             return rejectOrder(user, stock, request,
                     "Order Rejected: Stock is delisted");
         }
 
-        // Step 3 — Side-specific validation
         if (request.getSide() == OrderSide.BUY) {
             return processBuyOrder(user, stock, request);
         } else {
@@ -72,20 +71,17 @@ public class OrderService {
         BigDecimal totalCost = price.multiply(
                 BigDecimal.valueOf(request.getQuantity()));
 
-        // Validate limit price is set for limit orders
         if (request.getType() == OrderType.LIMIT
                 && request.getLimitPrice() == null) {
             return rejectOrder(user, stock, request,
                     "Order Rejected: Limit price required for limit orders");
         }
 
-        // Check available shares
         if (stock.getTotalSharesAvailable() < request.getQuantity()) {
             return rejectOrder(user, stock, request,
                     "Order Rejected: Insufficient shares available");
         }
 
-        // Balance check
         if (request.isUseMargin()) {
             if (!marginService.hasSufficientMargin(user, totalCost)) {
                 return rejectOrder(user, stock, request,
@@ -100,26 +96,36 @@ public class OrderService {
             }
         }
 
-        // Create and save the order
         Order order = buildOrder(user, stock, request);
         Order savedOrder = orderRepository.save(order);
 
-        // Market order — execute immediately
         if (request.getType() == OrderType.MARKET) {
-            tradeService.executeTrade(savedOrder,
-                    stock.getCurrentPrice());
+            // Step 1 — try user-to-user matching first
+            matchingEngine.tryMatchOrder(savedOrder, stock.getCurrentPrice());
+
+            // Step 2 — reload to check remaining quantity after matching
+            Order reloaded = orderRepository.findById(savedOrder.getId())
+                    .orElseThrow();
+            int remaining = reloaded.getQuantity()
+                    - reloaded.getFilledQuantity();
+
+            // Step 3 — exchange fills whatever is left
+            if (remaining > 0) {
+                tradeService.executeTrade(reloaded, stock.getCurrentPrice());
+            }
         }
-        // Limit order — stays PENDING until price condition is met
 
         log.info("Order placed: {} {} {} x{} by {}",
                 request.getSide(), request.getType(),
                 stock.getTicker(), request.getQuantity(),
                 user.getUsername());
 
-        return toOrderResponse(savedOrder);
+        return toOrderResponse(orderRepository.findById(
+                savedOrder.getId()).orElse(savedOrder));
     }
 
     // ── Sell Order ───────────────────────────────────────────────────────────
+
     private OrderResponse processSellOrder(User user, Stock stock,
                                            PlaceOrderRequest request) {
         if (request.getType() == OrderType.LIMIT
@@ -139,18 +145,30 @@ public class OrderService {
                     "Order Rejected: Insufficient shares to sell");
         }
 
-        // Enforce funding source — ignore whatever user sent,
-        // use how the position was originally funded
-        request.setUseMargin(holding.isMarginPosition()); // ← add this
+        // Enforce funding source from original buy
+        request.setUseMargin(holding.isMarginPosition());
 
         Order order = buildOrder(user, stock, request);
         Order savedOrder = orderRepository.save(order);
 
         if (request.getType() == OrderType.MARKET) {
-            tradeService.executeTrade(savedOrder, stock.getCurrentPrice());
+            // Step 1 — try user-to-user matching first
+            matchingEngine.tryMatchOrder(savedOrder, stock.getCurrentPrice());
+
+            // Step 2 — reload to check remaining quantity after matching
+            Order reloaded = orderRepository.findById(savedOrder.getId())
+                    .orElseThrow();
+            int remaining = reloaded.getQuantity()
+                    - reloaded.getFilledQuantity();
+
+            // Step 3 — exchange fills whatever is left
+            if (remaining > 0) {
+                tradeService.executeTrade(reloaded, stock.getCurrentPrice());
+            }
         }
 
-        return toOrderResponse(savedOrder);
+        return toOrderResponse(orderRepository.findById(
+                savedOrder.getId()).orElse(savedOrder));
     }
 
     // ── Cancel Order ─────────────────────────────────────────────────────────
@@ -166,9 +184,10 @@ public class OrderService {
             throw new RuntimeException(
                     "Cannot cancel another user's order");
         }
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PENDING
+                && order.getStatus() != OrderStatus.PARTIAL) {
             throw new RuntimeException(
-                    "Only PENDING orders can be cancelled");
+                    "Only PENDING or PARTIAL orders can be cancelled");
         }
 
         order.setStatus(OrderStatus.CANCELLED);
@@ -180,34 +199,75 @@ public class OrderService {
     @Transactional
     public void checkAndExecuteLimitOrders(Long stockId,
                                            BigDecimal currentPrice) {
-        // Called by StockPriceSimulator on every price tick.
-        // Checks if any pending limit orders can now execute.
-
         // BUY limit orders — execute when price drops to limit price
         orderRepository
                 .findEligibleBuyLimitOrders(stockId, currentPrice)
-                .forEach(order -> tradeService.executeTrade(
-                        order, currentPrice));
+                .forEach(order -> {
+                    matchingEngine.tryMatchOrder(order, currentPrice);
+                    Order reloaded = orderRepository
+                            .findById(order.getId()).orElseThrow();
+                    int remaining = reloaded.getQuantity()
+                            - reloaded.getFilledQuantity();
+                    if (remaining > 0) {
+                        tradeService.executeTrade(reloaded, currentPrice);
+                    }
+                });
 
         // SELL limit orders — execute when price rises to limit price
         orderRepository
                 .findEligibleSellLimitOrders(stockId, currentPrice)
-                .forEach(order -> tradeService.executeTrade(
-                        order, currentPrice));
+                .forEach(order -> {
+                    matchingEngine.tryMatchOrder(order, currentPrice);
+                    Order reloaded = orderRepository
+                            .findById(order.getId()).orElseThrow();
+                    int remaining = reloaded.getQuantity()
+                            - reloaded.getFilledQuantity();
+                    if (remaining > 0) {
+                        tradeService.executeTrade(reloaded, currentPrice);
+                    }
+                });
     }
 
-    // ── Market Close — Cancel All Pending ────────────────────────────────────
+    // ── Market Close — Cancel All Pending and Refund ────────────────────────────────────
 
     @Transactional
     public void cancelAllPendingOrdersAtMarketClose() {
-        // Called by MarketHoursService when market closes.
-        // All limit orders that never got filled are cancelled.
         List<Order> pendingOrders = orderRepository.findAllPendingOrders();
+
         pendingOrders.forEach(order -> {
+            int remaining = order.getQuantity() - order.getFilledQuantity();
+
+            // Only BUY orders need a refund — SELL orders haven't
+            // had their shares removed yet (still in portfolio)
+            if (remaining > 0 && order.getSide() == OrderSide.BUY) {
+                BigDecimal refundAmount = order.getLimitPrice()
+                        .multiply(BigDecimal.valueOf(remaining));
+
+                User user = order.getUser();
+
+                if (order.isMarginOrder()) {
+                    MarginAccount margin = marginService.getMarginAccount(user);
+                    margin.setMarginUsed(
+                            margin.getMarginUsed().subtract(refundAmount));
+                    margin.setMarginAvailable(
+                            margin.getMarginAvailable().add(refundAmount));
+                    margin.setLastUpdatedAt(LocalDateTime.now());
+                    marginAccountRepository.save(margin);
+                    log.info("Margin refunded {} to user {} for cancelled order {}",
+                            refundAmount, user.getUsername(), order.getId());
+                } else {
+                    user.setBalance(user.getBalance().add(refundAmount));
+                    userRepository.save(user);
+                    log.info("Balance refunded {} to user {} for cancelled order {}",
+                            refundAmount, user.getUsername(), order.getId());
+                }
+            }
+
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
         });
-        log.info("Cancelled {} pending orders at market close",
+
+        log.info("Cancelled {} pending/partial orders at market close",
                 pendingOrders.size());
     }
 
@@ -242,11 +302,8 @@ public class OrderService {
         order.setQuantity(request.getQuantity());
         order.setLimitPrice(request.getLimitPrice());
         order.setMarginOrder(request.isUseMargin());
-        order.setStatus(request.getType() == OrderType.MARKET
-                ? OrderStatus.PENDING
-                : OrderStatus.PENDING);
-        // Both start as PENDING — TradeService immediately
-        // executes MARKET orders after this.
+        order.setFilledQuantity(0);
+        order.setStatus(OrderStatus.PENDING);
         order.setPlacedAt(LocalDateTime.now());
         return order;
     }
@@ -257,7 +314,8 @@ public class OrderService {
         Order order = buildOrder(user, stock, request);
         order.setStatus(OrderStatus.REJECTED);
         Order saved = orderRepository.save(order);
-        log.warn("Order rejected for user {}: {}", user.getUsername(), reason);
+        log.warn("Order rejected for user {}: {}",
+                user.getUsername(), reason);
         OrderResponse response = toOrderResponse(saved);
         response.setRejectionReason(reason);
         return response;
@@ -296,6 +354,7 @@ public class OrderService {
                 .type(order.getType())
                 .status(order.getStatus())
                 .quantity(order.getQuantity())
+                .filledQuantity(order.getFilledQuantity())
                 .limitPrice(order.getLimitPrice())
                 .executedPrice(order.getExecutedPrice())
                 .totalOrderValue(order.getTotalOrderValue())
@@ -306,7 +365,6 @@ public class OrderService {
     }
 
     public List<OrderResponse> getOrdersByUser(User user) {
-        // Used by AdminController to view a specific user's orders.
         return orderRepository.findByUserOrderByPlacedAtDesc(user)
                 .stream()
                 .map(this::toOrderResponse)

@@ -292,6 +292,7 @@ export default function AdminPanel() {
                 <thead>
                   <tr>
                     <th>STOCK</th>
+                    <th>TYPE</th>
                     <th>BUYER</th>
                     <th>SELLER</th>
                     <th>QTY</th>
@@ -303,10 +304,23 @@ export default function AdminPanel() {
                 <tbody>
                   {trades.slice(0, 10).map(t => (
                     <tr key={t.id}>
-                      <td style={{ fontWeight: 700,
-                                   color: 'var(--text-primary)',
-                                   letterSpacing: '0.04em' }}>
+                      <td style={{ fontWeight: 700, color: 'var(--text-primary)', 
+                        letterSpacing: '0.04em' }}>
                         {t.ticker}
+                      </td>
+                      <td>
+                        <span style={{
+                          fontSize:   10,
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 700,
+                          color: t.buyerUsername !== 'EXCHANGE'
+                            && t.sellerUsername !== 'EXCHANGE'
+                            ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                        }}>
+                          {t.buyerUsername !== 'EXCHANGE'
+                            && t.sellerUsername !== 'EXCHANGE'
+                            ? 'USER↔USER' : 'EXCHANGE'}
+                        </span>
                       </td>
                       <td style={{ color: 'var(--gain)' }}>
                         {t.buyerUsername}
@@ -496,6 +510,7 @@ export default function AdminPanel() {
               <tr>
                 <th>#</th>
                 <th>STOCK</th>
+                <th>TYPE</th>
                 <th>BUYER</th>
                 <th>SELLER</th>
                 <th>QTY</th>
@@ -511,13 +526,36 @@ export default function AdminPanel() {
                     #{i + 1}
                   </td>
                   <td style={{ fontWeight: 700,
-                               color: 'var(--text-primary)',
-                               letterSpacing: '0.04em' }}>
+             color: 'var(--text-primary)',
+             letterSpacing: '0.04em' }}>
                     {t.ticker}
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)',
-                                  fontWeight: 400 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
                       {t.companyName}
                     </div>
+                  </td>
+                  <td>
+                    <span style={{
+                      fontSize:      10,
+                      fontFamily:    'var(--font-mono)',
+                      fontWeight:    700,
+                      padding:       '2px 8px',
+                      borderRadius:  20,
+                      letterSpacing: '0.06em',
+                      background: t.buyerUsername !== 'EXCHANGE'
+                        && t.sellerUsername !== 'EXCHANGE'
+                        ? 'var(--accent-cyan-dim)' : 'var(--bg-input)',
+                      color: t.buyerUsername !== 'EXCHANGE'
+                        && t.sellerUsername !== 'EXCHANGE'
+                        ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      border: `1px solid ${
+                        t.buyerUsername !== 'EXCHANGE'
+                        && t.sellerUsername !== 'EXCHANGE'
+                        ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
+                    }}>
+                      {t.buyerUsername !== 'EXCHANGE'
+                        && t.sellerUsername !== 'EXCHANGE'
+                        ? 'USER↔USER' : 'EXCHANGE'}
+                    </span>
                   </td>
                   <td style={{ color: 'var(--gain)', fontWeight: 600 }}>
                     {t.buyerUsername}

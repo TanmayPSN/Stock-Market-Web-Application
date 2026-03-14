@@ -30,6 +30,99 @@ public class TradeService {
     // ── Core Trade Execution ─────────────────────────────────────────────────
 
     @Transactional
+    public void executeUserToUserTrade(Order buyOrder, Order sellOrder,
+                                       BigDecimal executedPrice) {
+        User  buyer  = buyOrder.getUser();
+        User  seller = sellOrder.getUser();
+        Stock stock  = buyOrder.getStock();
+
+        // Match on the smaller remaining quantity of the two orders
+        int buyRemaining  = buyOrder.getQuantity()
+                - buyOrder.getFilledQuantity();
+        int sellRemaining = sellOrder.getQuantity()
+                - sellOrder.getFilledQuantity();
+        int qty = Math.min(buyRemaining, sellRemaining);
+
+        BigDecimal tradeValue = executedPrice
+                .multiply(BigDecimal.valueOf(qty));
+
+        // ── Buyer side ──
+        if (buyOrder.isMarginOrder()) {
+            marginService.allocateMargin(buyer, tradeValue);
+        } else {
+            buyer.setBalance(buyer.getBalance().subtract(tradeValue));
+            userRepository.save(buyer);
+        }
+        portfolioService.updateHoldingOnBuy(
+                buyer, stock, qty, executedPrice,
+                buyOrder.isMarginOrder());
+
+        // ── Seller side ──
+        if (sellOrder.isMarginOrder()) {
+            marginService.releaseMargin(seller, tradeValue);
+        } else {
+            seller.setBalance(seller.getBalance().add(tradeValue));
+            userRepository.save(seller);
+        }
+        portfolioService.updateHoldingOnSell(
+                seller, stock, qty, executedPrice);
+
+        // ── Stock available shares — net zero for user-to-user ──
+        // Buyer takes qty, seller returns qty — no net change needed.
+        // Only update if quantities differ (partial) — still net zero.
+
+        // ── Update filled quantities ──
+        buyOrder.setFilledQuantity(buyOrder.getFilledQuantity() + qty);
+        sellOrder.setFilledQuantity(sellOrder.getFilledQuantity() + qty);
+
+        // ── Mark fully filled orders as EXECUTED ──
+        // Mark partially filled orders as PARTIAL ──
+        updateOrderStatus(buyOrder,  executedPrice, tradeValue);
+        updateOrderStatus(sellOrder, executedPrice, tradeValue);
+
+        // ── Trade record ──
+        Trade trade = new Trade();
+        trade.setBuyOrder(buyOrder);
+        trade.setSellOrder(sellOrder);
+        trade.setStock(stock);
+        trade.setBuyer(buyer);
+        trade.setSeller(seller);
+        trade.setQuantity(qty);
+        trade.setExecutedPrice(executedPrice);
+        trade.setTotalTradeValue(tradeValue);
+        trade.setExecutedAt(LocalDateTime.now());
+        tradeRepository.save(trade);
+
+        log.info("PARTIAL/FULL trade: {} x{} @ {} | {} → {} | BUY filled {}/{} SELL filled {}/{}",
+                stock.getTicker(), qty, executedPrice,
+                buyer.getUsername(), seller.getUsername(),
+                buyOrder.getFilledQuantity(), buyOrder.getQuantity(),
+                sellOrder.getFilledQuantity(), sellOrder.getQuantity());
+    }
+
+    private void updateOrderStatus(Order order,
+                                   BigDecimal executedPrice,
+                                   BigDecimal tradeValue) {
+        int remaining = order.getQuantity() - order.getFilledQuantity();
+
+        if (remaining == 0) {
+            // Fully filled
+            order.setStatus(OrderStatus.EXECUTED);
+            order.setExecutedPrice(executedPrice);
+            order.setTotalOrderValue(
+                    executedPrice.multiply(
+                            BigDecimal.valueOf(order.getQuantity())));
+            order.setExecutedAt(LocalDateTime.now());
+        } else {
+            // Partially filled — stays PENDING for remaining qty
+            order.setStatus(OrderStatus.PARTIAL);
+            order.setExecutedPrice(executedPrice);
+            // executedPrice reflects last fill price
+        }
+        orderRepository.save(order);
+    }
+
+    @Transactional
     public void executeTrade(Order order, BigDecimal executedPrice) {
         // This is the heart of the system.
         // Called for MARKET orders immediately and LIMIT orders

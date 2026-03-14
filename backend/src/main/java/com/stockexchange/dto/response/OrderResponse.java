@@ -55,6 +55,11 @@ public class OrderResponse {
     // If status = REJECTED, explains why — "Insufficient balance",
     // "Market is closed", etc. Null for non-rejected orders.
 
+    private Integer filledQuantity;
+    // How many shares have been filled so far.
+    // Equal to quantity when fully executed.
+    // Less than quantity when partially filled (PARTIAL status).
+
     private LocalDateTime placedAt;
     // When the user placed the order.
 

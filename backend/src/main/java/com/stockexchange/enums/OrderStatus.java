@@ -12,6 +12,9 @@ public enum OrderStatus {
     // Balance and portfolio holdings have been updated.
     // A Trade record has been created for this order.
 
+    PARTIAL,
+    // Trade has been completed partially.
+
     CANCELLED,
     // Order was cancelled before execution.
     // Two scenarios:

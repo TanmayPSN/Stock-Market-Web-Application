@@ -288,9 +288,10 @@ export default function Portfolio() {
               {tab === 'trades'   && <TrendingUp size={14} />}
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
               {tab === 'orders' && orders.filter(
-                o => o.status === 'PENDING').length > 0 && (
+                o => o.status === 'PENDING' || o.status === 'PARTIAL').length > 0 && (
                 <span style={s.tabBadge}>
-                  {orders.filter(o => o.status === 'PENDING').length}
+                  {orders.filter(o => o.status === 'PENDING'
+                    || o.status === 'PARTIAL').length}
                 </span>
               )}
             </button>
@@ -389,7 +390,7 @@ export default function Portfolio() {
 
     {/* Status filter buttons */}
     <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-      {['ALL', 'PENDING', 'EXECUTED', 'CANCELLED', 'REJECTED'].map(f => (
+      {['ALL', 'PENDING', 'PARTIAL', 'EXECUTED', 'CANCELLED', 'REJECTED'].map(f => (
         <button
           key={f}
           onClick={() => setOrderFilter(f)}
@@ -417,7 +418,7 @@ export default function Portfolio() {
           <thead>
             <tr>
               <th>STOCK</th><th>SIDE</th><th>TYPE</th><th>QTY</th>
-              <th>LIMIT PRICE</th><th>EXEC PRICE</th><th>VALUE</th>
+              <th>FILLED</th><th>LIMIT PRICE</th><th>EXEC PRICE</th><th>VALUE</th>
               <th>STATUS</th><th>PLACED</th><th>ACTION</th>
             </tr>
           </thead>
@@ -438,6 +439,14 @@ export default function Portfolio() {
                 </td>
                 <td>{o.type}</td>
                 <td>{o.quantity}</td>
+                <td style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize:   12,
+                  color: o.filledQuantity > 0
+                    ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                }}>
+                  {o.filledQuantity ?? 0}/{o.quantity}
+                </td>
                 <td>{o.limitPrice
                   ? `₹${parseFloat(o.limitPrice).toLocaleString('en-IN')}` : '—'}
                 </td>
@@ -456,7 +465,7 @@ export default function Portfolio() {
                   {new Date(o.placedAt).toLocaleString('en-IN')}
                 </td>
                 <td>
-                  {o.status === 'PENDING' && (
+                  {(o.status === 'PENDING' || o.status === 'PARTIAL') && (
                     <button
                       onClick={() => handleCancelOrder(o.id)}
                       className="btn btn-ghost"
