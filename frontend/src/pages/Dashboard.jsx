@@ -14,6 +14,7 @@ import {
 export default function Dashboard() {
   const { user }                        = useAuth()
   const { prices, connected, flashMap } = useWebSocket()
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [stocks,        setStocks]        = useState([])
   const [portfolio,     setPortfolio]     = useState(null)
@@ -75,6 +76,11 @@ export default function Dashboard() {
     .filter(s => s.priceChangeAmount < 0)
     .sort((a, b) => a.priceChangePercent - b.priceChangePercent)
     .slice(0, 3)
+
+  const filteredStocks = enrichedStocks.filter(s =>
+    s.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.companyName.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   if (loading) return <DashboardSkeleton />
 
@@ -190,23 +196,58 @@ export default function Dashboard() {
         <div style={s.sectionHeader}>
           <h2 style={s.sectionTitle}>Live Market</h2>
           <span style={s.stockCount}>
+            {filteredStocks.length} stocks
+          </span>
+          <input
+            type="text"
+            placeholder="Search by ticker or company..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="input"
+            style={{
+              marginLeft:  'auto',
+              width:       260,
+              fontSize:    13,
+              padding:     '8px 14px',
+              fontFamily:  'var(--font-mono)',
+            }}
+          />
+        </div>
+
+        {/* ── All Stocks ──
+        <div style={s.sectionHeader}>
+          <h2 style={s.sectionTitle}>Live Market</h2>
+          <span style={s.stockCount}>
             {enrichedStocks.length} stocks
           </span>
-        </div>
+        </div> */}
 
         <div style={s.stockGrid} className="stagger">
-          {enrichedStocks.map(stock => (
-            <StockCard
-              key={stock.ticker}
-              stock={stock}
-              flash={flashMap[stock.ticker]}
-              onBuy={() => openOrderForm(stock, 'BUY')}
-              onSell={() => openOrderForm(stock, 'SELL')}
-              isMarketOpen={marketStatus?.isOpen}
-            />
-          ))}
+          {filteredStocks.length === 0
+        ? (
+          <div style={{
+                gridColumn: '1/-1',
+                textAlign:  'center',
+                padding:    '40px',
+                color:      'var(--text-muted)',
+                fontFamily: 'var(--font-mono)',
+                fontSize:   13,
+              }}>
+            No stocks found for "{searchQuery}"
+          </div>
+          )
+          : filteredStocks.map(stock => (
+              <StockCard
+                key={stock.ticker}
+                stock={stock}
+                flash={flashMap[stock.ticker]}
+                onBuy={() => openOrderForm(stock, 'BUY')}
+                onSell={() => openOrderForm(stock, 'SELL')}
+                isMarketOpen={marketStatus?.isOpen}
+              />
+            ))
+          }
         </div>
-
       </div>
 
       {/* ── Order Form Modal ── */}

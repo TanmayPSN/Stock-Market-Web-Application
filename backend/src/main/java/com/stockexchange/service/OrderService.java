@@ -122,14 +122,12 @@ public class OrderService {
     // ── Sell Order ───────────────────────────────────────────────────────────
     private OrderResponse processSellOrder(User user, Stock stock,
                                            PlaceOrderRequest request) {
-        // Validate limit price for limit sell orders
         if (request.getType() == OrderType.LIMIT
                 && request.getLimitPrice() == null) {
             return rejectOrder(user, stock, request,
                     "Order Rejected: Limit price required for limit orders");
         }
 
-        // Check user owns enough shares to sell
         PortfolioHolding holding = holdingRepository
                 .findByPortfolioIdAndStockId(
                         getUserPortfolioId(user), stock.getId())
@@ -141,12 +139,15 @@ public class OrderService {
                     "Order Rejected: Insufficient shares to sell");
         }
 
+        // Enforce funding source — ignore whatever user sent,
+        // use how the position was originally funded
+        request.setUseMargin(holding.isMarginPosition()); // ← add this
+
         Order order = buildOrder(user, stock, request);
         Order savedOrder = orderRepository.save(order);
 
         if (request.getType() == OrderType.MARKET) {
-            tradeService.executeTrade(savedOrder,
-                    stock.getCurrentPrice());
+            tradeService.executeTrade(savedOrder, stock.getCurrentPrice());
         }
 
         return toOrderResponse(savedOrder);

@@ -43,16 +43,16 @@ public class PortfolioService {
     // ── Update Holdings after Trade ──────────────────────────────────────────
 
     @Transactional
+    // Pass isMarginOrder into the method — add it as a parameter
     public void updateHoldingOnBuy(User user, Stock stock,
-                                   int quantity, BigDecimal executedPrice) {
-        // Called by TradeService when a BUY trade executes.
+                                   int quantity, BigDecimal executedPrice,
+                                   boolean isMarginOrder) {
         Portfolio portfolio = getPortfolioEntity(user);
 
         holdingRepository
                 .findByPortfolioAndStock(portfolio, stock)
                 .ifPresentOrElse(
                         holding -> {
-                            // Holding exists — update average price and quantity.
                             BigDecimal totalCost = holding.getTotalInvestedAmount()
                                     .add(executedPrice.multiply(
                                             BigDecimal.valueOf(quantity)));
@@ -64,12 +64,11 @@ public class PortfolioService {
                                     totalCost.divide(
                                             BigDecimal.valueOf(newQuantity),
                                             2, RoundingMode.HALF_UP));
-                            // New average = total cost / total shares
+                            holding.setMarginPosition(isMarginOrder); // ← add this
                             holding.setLastUpdatedAt(LocalDateTime.now());
                             holdingRepository.save(holding);
                         },
                         () -> {
-                            // No holding yet — create a new one.
                             PortfolioHolding newHolding = new PortfolioHolding();
                             newHolding.setPortfolio(portfolio);
                             newHolding.setStock(stock);
@@ -78,6 +77,7 @@ public class PortfolioService {
                             newHolding.setTotalInvestedAmount(
                                     executedPrice.multiply(
                                             BigDecimal.valueOf(quantity)));
+                            newHolding.setMarginPosition(isMarginOrder); // ← add this
                             newHolding.setLastUpdatedAt(LocalDateTime.now());
                             holdingRepository.save(newHolding);
                         }

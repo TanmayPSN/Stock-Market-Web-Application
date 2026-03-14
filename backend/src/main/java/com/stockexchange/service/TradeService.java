@@ -56,6 +56,10 @@ public class TradeService {
     protected void executeBuyTrade(Order order, User user, Stock stock,
                                    int qty, BigDecimal executedPrice,
                                    BigDecimal tradeValue) {
+
+        log.info("=== MARGIN DEBUG === isMarginOrder: {}", order.isMarginOrder());
+        log.info("=== MARGIN DEBUG === order id: {}", order.getId());
+
         // Step 1 — Deduct balance or margin
         if (order.isMarginOrder()) {
             marginService.allocateMargin(user, tradeValue);
@@ -71,8 +75,7 @@ public class TradeService {
         stockRepository.save(stock);
 
         // Step 3 — Update portfolio holding
-        portfolioService.updateHoldingOnBuy(
-                user, stock, qty, executedPrice);
+        portfolioService.updateHoldingOnBuy(user, stock, qty, executedPrice, order.isMarginOrder());
 
         // Step 4 — Update order status
         updateOrderAsExecuted(order, executedPrice, tradeValue);
@@ -97,9 +100,10 @@ public class TradeService {
         // Step 1 — Credit balance
         if (order.isMarginOrder()) {
             marginService.releaseMargin(user, tradeValue);
+        } else {
+            user.setBalance(user.getBalance().add(tradeValue));
+            userRepository.save(user);
         }
-        user.setBalance(user.getBalance().add(tradeValue));
-        userRepository.save(user);
 
         // Step 2 — Increase available shares in the stock
         stock.setTotalSharesAvailable(
@@ -134,13 +138,31 @@ public class TradeService {
     }
 
     public List<TradeResponse> getAllTrades() {
-        // Admin only — full platform trade history.
         return tradeRepository.findAllTradesOrderedByDate()
                 .stream()
-                .map(t -> toTradeResponse(t, null))
+                .map(t -> toTradeResponseForAdmin(t))
                 .toList();
     }
 
+    private TradeResponse toTradeResponseForAdmin(Trade trade) {
+        // For admin, derive side from whether buyer or seller is EXCHANGE
+        String side = trade.getSeller() == null ? "BUY" : "SELL";
+
+        return TradeResponse.builder()
+                .id(trade.getId())
+                .ticker(trade.getStock().getTicker())
+                .companyName(trade.getStock().getCompanyName())
+                .buyerUsername(trade.getBuyer() != null
+                        ? trade.getBuyer().getUsername() : "EXCHANGE")
+                .sellerUsername(trade.getSeller() != null
+                        ? trade.getSeller().getUsername() : "EXCHANGE")
+                .quantity(trade.getQuantity())
+                .executedPrice(trade.getExecutedPrice())
+                .totalTradeValue(trade.getTotalTradeValue())
+                .side(side)
+                .executedAt(trade.getExecutedAt())
+                .build();
+    }
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private void updateOrderAsExecuted(Order order,

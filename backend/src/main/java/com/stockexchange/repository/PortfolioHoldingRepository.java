@@ -3,6 +3,7 @@ package com.stockexchange.repository;
 import com.stockexchange.entity.Portfolio;
 import com.stockexchange.entity.PortfolioHolding;
 import com.stockexchange.entity.Stock;
+import com.stockexchange.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -37,6 +38,9 @@ public interface PortfolioHoldingRepository extends JpaRepository<PortfolioHoldi
     List<PortfolioHolding> findTopHoldingsByPortfolioId(@Param("portfolioId") Long portfolioId);
     // Returns holdings sorted by invested amount, highest first.
     // Used on portfolio page to show biggest positions at the top.
+
+    @Query("SELECT h FROM PortfolioHolding h WHERE h.portfolio.user = :user AND h.marginPosition = true")
+    List<PortfolioHolding> findByPortfolioUserAndMarginPositionTrue(@Param("user") User user);
 
     boolean existsByPortfolioAndStock(Portfolio portfolio, Stock stock);
     // Used before creating a new holding —

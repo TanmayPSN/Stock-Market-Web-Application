@@ -17,6 +17,9 @@ export default function AdminPanel() {
   const [marketOpen,  setMarketOpen]  = useState(false)
   const [refreshing,  setRefreshing]  = useState(false)
   const [actionMsg,   setActionMsg]   = useState('')
+  const [userSearch,    setUserSearch]    = useState('')
+  const [tradeSearch,   setTradeSearch]   = useState('')
+  const [tradeSideFilter, setTradeSideFilter] = useState('ALL')
 
   useEffect(() => { fetchAll() }, [])
 
@@ -71,7 +74,9 @@ export default function AdminPanel() {
         u.id === userId ? { ...u, active: !isActive } : u))
       showMsg(`User ${isActive ? 'deactivated' : 'activated'}`)
     } catch (err) {
-      showMsg('Failed to update user')
+      // Show the backend's rejection message if available
+      const msg = err.response?.data?.message
+      showMsg(msg ?? 'Failed to update user')
     }
   }
 
@@ -95,6 +100,31 @@ export default function AdminPanel() {
   }
 
   if (loading) return <AdminSkeleton />
+  const filteredUsers = users.filter(u =>
+    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+    String(u.id).includes(userSearch)
+  )
+
+  const filteredTrades = trades.filter(t => {
+  const q = tradeSearch.toLowerCase()
+
+  const matchesSearch = q === '' || (
+    t.ticker?.toLowerCase().includes(q) ||
+    t.companyName?.toLowerCase().includes(q) ||
+    (t.buyerUsername !== 'EXCHANGE' &&
+      t.buyerUsername?.toLowerCase().includes(q)) ||
+    (t.sellerUsername !== 'EXCHANGE' &&
+      t.sellerUsername?.toLowerCase().includes(q))
+  )
+
+  const matchesSide =
+    tradeSideFilter === 'ALL'  ? true :
+    tradeSideFilter === 'BUY'  ? t.side === 'BUY' :
+    tradeSideFilter === 'SELL' ? t.side === 'SELL' : true
+
+  return matchesSearch && matchesSide
+})
 
   const tabs = [
     { id: 'overview', label: 'Overview',     icon: <BarChart2 size={14} /> },
@@ -307,150 +337,216 @@ export default function AdminPanel() {
 
         {/* ── Users Tab ── */}
         {activeTab === 'users' && (
-          <div className="table-wrapper animate-fadeIn">
-            <table>
-              <thead>
-                <tr>
-                  <th>USER</th>
-                  <th>EMAIL</th>
-                  <th>ROLE</th>
-                  <th>BALANCE</th>
-                  <th>STATUS</th>
-                  <th>JOINED</th>
-                  <th>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td>
-                      <div style={{ fontWeight: 700,
-                                    color: 'var(--text-primary)' }}>
-                        {u.username}
-                      </div>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)',
-                                 fontSize: 12 }}>
-                      {u.email}
-                    </td>
-                    <td>
-                      <span style={{
-                        ...s.roleBadge,
-                        background: u.role === 'ROLE_ADMIN'
-                          ? 'var(--accent-amber-dim)'
-                          : 'var(--accent-cyan-dim)',
-                        color: u.role === 'ROLE_ADMIN'
-                          ? 'var(--accent-amber)'
-                          : 'var(--accent-cyan)',
-                        border: `1px solid ${u.role === 'ROLE_ADMIN'
-                          ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`,
-                      }}>
-                        {u.role === 'ROLE_ADMIN' ? 'ADMIN' : 'USER'}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)',
-                                 fontWeight: 600 }}>
-                      ₹{parseFloat(u.balance).toLocaleString('en-IN')}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${
-                        u.active ? 'executed' : 'rejected'}`}>
-                        {u.active ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)',
-                                 fontSize: 12 }}>
-                      {new Date(u.createdAt).toLocaleDateString('en-IN')}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          onClick={() => toggleUser(u.id, u.active)}
-                          className="btn btn-ghost"
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: 11,
-                            color: u.active
-                              ? 'var(--loss)' : 'var(--gain)',
-                            borderColor: u.active
-                              ? 'var(--loss)' : 'var(--gain)',
-                          }}
-                        >
-                          {u.active ? <XCircle size={12} />
-                                    : <CheckCircle size={12} />}
-                          {u.active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  <div className="animate-fadeIn">
+
+    {/* Search bar */}
+    <div style={{ marginBottom: 12 }}>
+      <input
+        type="text"
+        placeholder="Search by username, email or ID..."
+        value={userSearch}
+        onChange={e => setUserSearch(e.target.value)}
+        className="input"
+        style={{ width: 320, fontSize: 13, fontFamily: 'var(--font-mono)' }}
+      />
+    </div>
+
+    <div className="table-wrapper">
+      {filteredUsers.length === 0
+        ? <div style={s.emptyMargin}>
+            <p style={{ fontFamily: 'var(--font-mono)',
+                        color: 'var(--text-muted)', fontSize: 13 }}>
+              No users found for "{userSearch}"
+            </p>
           </div>
-        )}
+        : (
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>USER</th>
+                <th>EMAIL</th>
+                <th>ROLE</th>
+                <th>BALANCE</th>
+                <th>STATUS</th>
+                <th>JOINED</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u.id}>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    #{u.id}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 700,
+                                  color: 'var(--text-primary)' }}>
+                      {u.username}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    {u.email}
+                  </td>
+                  <td>
+                    <span style={{
+                      ...s.roleBadge,
+                      background: u.role === 'ROLE_ADMIN'
+                        ? 'var(--accent-amber-dim)'
+                        : 'var(--accent-cyan-dim)',
+                      color: u.role === 'ROLE_ADMIN'
+                        ? 'var(--accent-amber)'
+                        : 'var(--accent-cyan)',
+                      border: `1px solid ${u.role === 'ROLE_ADMIN'
+                        ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`,
+                    }}>
+                      {u.role === 'ROLE_ADMIN' ? 'ADMIN' : 'USER'}
+                    </span>
+                  </td>
+                  <td style={{ fontFamily: 'var(--font-mono)',
+                               fontWeight: 600 }}>
+                    ₹{parseFloat(u.balance).toLocaleString('en-IN')}
+                  </td>
+                  <td>
+                    <span className={`badge badge-${
+                      u.active ? 'executed' : 'rejected'}`}>
+                      {u.active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    {new Date(u.createdAt).toLocaleDateString('en-IN')}
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => toggleUser(u.id, u.active)}
+                      className="btn btn-ghost"
+                      style={{
+                        padding:     '4px 10px',
+                        fontSize:    11,
+                        color:       u.active ? 'var(--loss)' : 'var(--gain)',
+                        borderColor: u.active ? 'var(--loss)' : 'var(--gain)',
+                      }}
+                    >
+                      {u.active ? <XCircle size={12} />
+                                : <CheckCircle size={12} />}
+                      {u.active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      }
+    </div>
+  </div>
+)}
 
         {/* ── Trades Tab ── */}
         {activeTab === 'trades' && (
-          <div className="table-wrapper animate-fadeIn">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>STOCK</th>
-                  <th>BUYER</th>
-                  <th>SELLER</th>
-                  <th>QTY</th>
-                  <th>EXEC PRICE</th>
-                  <th>TOTAL VALUE</th>
-                  <th>TIME</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trades.map((t, i) => (
-                  <tr key={t.id}>
-                    <td style={{ color: 'var(--text-muted)',
-                                 fontSize: 12 }}>
-                      #{i + 1}
-                    </td>
-                    <td style={{ fontWeight: 700,
-                                 color: 'var(--text-primary)',
-                                 letterSpacing: '0.04em' }}>
-                      {t.ticker}
-                      <div style={{ fontSize: 11,
-                                    color: 'var(--text-muted)',
-                                    fontWeight: 400 }}>
-                        {t.companyName}
-                      </div>
-                    </td>
-                    <td style={{ color: 'var(--gain)', fontWeight: 600 }}>
-                      {t.buyerUsername}
-                    </td>
-                    <td style={{ color: 'var(--loss)', fontWeight: 600 }}>
-                      {t.sellerUsername}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{t.quantity}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)',
-                                 fontWeight: 600 }}>
-                      ₹{parseFloat(t.executedPrice)
-                          .toLocaleString('en-IN')}
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)',
-                                 fontWeight: 700,
-                                 color: 'var(--accent-amber)' }}>
-                      ₹{parseFloat(t.totalTradeValue)
-                          .toLocaleString('en-IN')}
-                    </td>
-                    <td style={{ color: 'var(--text-muted)',
-                                 fontSize: 12 }}>
-                      {new Date(t.executedAt)
-                        .toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  <div className="animate-fadeIn">
+
+    {/* Search + Side filter */}
+    <div style={{ display: 'flex', gap: 10, marginBottom: 12,
+                  alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        type="text"
+        placeholder="Search by ticker, company, buyer or seller..."
+        value={tradeSearch}
+        onChange={e => setTradeSearch(e.target.value)}
+        className="input"
+        style={{ width: 340, fontSize: 13, fontFamily: 'var(--font-mono)' }}
+      />
+      {['ALL', 'BUY', 'SELL'].map(f => (
+        <button
+          key={f}
+          onClick={() => setTradeSideFilter(f)}
+          className="btn btn-ghost"
+          style={{
+            padding:     '4px 14px',
+            fontSize:    11,
+            fontFamily:  'var(--font-mono)',
+            letterSpacing: '0.06em',
+            color:       tradeSideFilter === f
+              ? 'var(--accent-cyan)' : 'var(--text-muted)',
+            borderColor: tradeSideFilter === f
+              ? 'var(--accent-cyan)' : 'var(--border-primary)',
+          }}
+        >
+          {f}
+        </button>
+      ))}
+      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)',
+                     color: 'var(--text-muted)', marginLeft: 'auto' }}>
+        {filteredTrades.length} trades
+      </span>
+    </div>
+
+    <div className="table-wrapper">
+      {filteredTrades.length === 0
+        ? <div style={s.emptyMargin}>
+            <p style={{ fontFamily: 'var(--font-mono)',
+                        color: 'var(--text-muted)', fontSize: 13 }}>
+              No trades found
+            </p>
           </div>
-        )}
+        : (
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>STOCK</th>
+                <th>BUYER</th>
+                <th>SELLER</th>
+                <th>QTY</th>
+                <th>EXEC PRICE</th>
+                <th>TOTAL VALUE</th>
+                <th>TIME</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTrades.map((t, i) => (
+                <tr key={t.id}>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    #{i + 1}
+                  </td>
+                  <td style={{ fontWeight: 700,
+                               color: 'var(--text-primary)',
+                               letterSpacing: '0.04em' }}>
+                    {t.ticker}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)',
+                                  fontWeight: 400 }}>
+                      {t.companyName}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--gain)', fontWeight: 600 }}>
+                    {t.buyerUsername}
+                  </td>
+                  <td style={{ color: 'var(--loss)', fontWeight: 600 }}>
+                    {t.sellerUsername}
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{t.quantity}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)',
+                               fontWeight: 600 }}>
+                    ₹{parseFloat(t.executedPrice).toLocaleString('en-IN')}
+                  </td>
+                  <td style={{ fontFamily: 'var(--font-mono)',
+                               fontWeight: 700,
+                               color: 'var(--accent-amber)' }}>
+                    ₹{parseFloat(t.totalTradeValue).toLocaleString('en-IN')}
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    {new Date(t.executedAt).toLocaleString('en-IN')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      }
+    </div>
+  </div>
+)}
 
         {/* ── Margin Calls Tab ── */}
         {activeTab === 'margin' && (

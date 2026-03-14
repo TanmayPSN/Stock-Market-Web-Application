@@ -51,8 +51,8 @@ public class User {
     // BigDecimal instead of double — financial calculations must be exact.
     // double has floating point errors (0.1 + 0.2 = 0.30000000000000004).
 
-    @Column(nullable = false)
-    private boolean isActive;
+    @Column(name = "isActive", nullable = false)
+    private boolean active;
     // Admin can deactivate a user without deleting their data.
     // If false, the user cannot log in or place orders.
 

@@ -77,8 +77,8 @@ public class Order {
     // executedPrice × quantity.
     // The actual money that moved. Null while pending.
 
-    @Column(nullable = false)
-    private boolean isMarginOrder;
+    @Column(name = "is_margin_order", nullable = false)
+    private boolean marginOrder;
     // Whether this order was placed using margin trading.
     // If true, the MarginAccount is involved in settling this trade.
 

@@ -19,6 +19,8 @@ const CHART_COLORS = [
 
 export default function Portfolio() {
   const { prices } = useWebSocket()
+  const [holdingSearch,  setHoldingSearch]  = useState('')
+  const [orderFilter,    setOrderFilter]    = useState('ALL')
 
   const [portfolio, setPortfolio] = useState(null)
   const [orders,    setOrders]    = useState([])
@@ -74,6 +76,15 @@ export default function Portfolio() {
       name:  h.ticker,
       value: parseFloat(h.currentValue.toFixed(2)),
     }))
+  
+  const filteredHoldings = enrichedHoldings.filter(h =>
+    h.ticker.toLowerCase().includes(holdingSearch.toLowerCase()) ||
+    h.companyName.toLowerCase().includes(holdingSearch.toLowerCase())
+  )
+
+  const filteredOrders = orderFilter === 'ALL'
+    ? orders
+    : orders.filter(o => o.status === orderFilter)
 
   const totalPortfolioValue =
     (portfolio?.availableBalance ?? 0) +
@@ -288,176 +299,181 @@ export default function Portfolio() {
 
         {/* ── Holdings tab ── */}
         {activeTab === 'holdings' && (
-          <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
-            {enrichedHoldings.length === 0
-              ? <EmptyState message="No holdings yet. Start trading!" />
-              : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>STOCK</th>
-                      <th>QTY</th>
-                      <th>AVG BUY</th>
-                      <th>CURRENT</th>
-                      <th>VALUE</th>
-                      <th>P&L</th>
-                      <th>P&L %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {enrichedHoldings.map(h => {
-                      const pl    = h.profitLoss
-                      const plPct = ((pl / h.investedAmount) * 100).toFixed(2)
-                      return (
-                        <tr key={h.ticker}>
-                          <td>
-                            <div>
-                              <div style={{ fontWeight: 700,
-                                            color: 'var(--text-primary)',
-                                            letterSpacing: '0.04em' }}>
-                                {h.ticker}
-                              </div>
-                              <div style={{ fontSize: 11,
-                                            color: 'var(--text-muted)' }}>
-                                {h.companyName}
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ color: 'var(--text-primary)',
-                                       fontWeight: 600 }}>
-                            {h.quantityOwned}
-                          </td>
-                          <td>₹{parseFloat(h.averageBuyPrice)
-                                  .toLocaleString('en-IN')}</td>
-                          <td style={{
-                            color: h.priceDirection === 'UP'
-                              ? 'var(--gain)' : 'var(--loss)',
-                            fontWeight: 600,
-                          }}>
-                            ₹{parseFloat(h.currentPrice)
-                                .toLocaleString('en-IN')}
-                            <span style={{ fontSize: 10, marginLeft: 4 }}>
-                              {h.priceDirection === 'UP' ? '▲' : '▼'}
-                            </span>
-                          </td>
-                          <td style={{ color: 'var(--text-primary)',
-                                       fontWeight: 600 }}>
-                            ₹{parseFloat(h.currentValue)
-                                .toLocaleString('en-IN')}
-                          </td>
-                          <td style={{
-                            color: pl >= 0 ? 'var(--gain)' : 'var(--loss)',
-                            fontWeight: 700,
-                          }}>
-                            {pl >= 0 ? '+' : ''}
-                            ₹{parseFloat(pl).toLocaleString('en-IN')}
-                          </td>
-                          <td>
-                            <span className={`badge badge-${
-                              parseFloat(plPct) >= 0
-                                ? 'executed' : 'rejected'}`}>
-                              {parseFloat(plPct) >= 0 ? '+' : ''}{plPct}%
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+        <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
+
+        {/* Search bar */}
+        <div style={{ marginBottom: 12 }}>
+          <input
+            type="text"
+            placeholder="Search holdings by ticker or company..."
+            value={holdingSearch}
+            onChange={e => setHoldingSearch(e.target.value)}
+            className="input"
+            style={{ width: 300, fontSize: 13, fontFamily: 'var(--font-mono)' }}
+          />
+        </div>
+
+    {filteredHoldings.length === 0
+      ? <EmptyState message={
+          holdingSearch
+            ? `No holdings found for "${holdingSearch}"`
+            : 'No holdings yet. Start trading!'
+        } />
+      : (
+        <table>
+          <thead>
+            <tr>
+              <th>STOCK</th><th>QTY</th><th>AVG BUY</th>
+              <th>CURRENT</th><th>VALUE</th><th>P&L</th><th>P&L %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredHoldings.map(h => {
+              const pl    = h.profitLoss
+              const plPct = ((pl / h.investedAmount) * 100).toFixed(2)
+              return (
+                <tr key={h.ticker}>
+                  <td>
+                    <div>
+                      <div style={{ fontWeight: 700,
+                                    color: 'var(--text-primary)',
+                                    letterSpacing: '0.04em' }}>
+                        {h.ticker}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {h.companyName}
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {h.quantityOwned}
+                  </td>
+                  <td>₹{parseFloat(h.averageBuyPrice).toLocaleString('en-IN')}</td>
+                  <td style={{
+                    color: h.priceDirection === 'UP' ? 'var(--gain)' : 'var(--loss)',
+                    fontWeight: 600,
+                  }}>
+                    ₹{parseFloat(h.currentPrice).toLocaleString('en-IN')}
+                    <span style={{ fontSize: 10, marginLeft: 4 }}>
+                      {h.priceDirection === 'UP' ? '▲' : '▼'}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    ₹{parseFloat(h.currentValue).toLocaleString('en-IN')}
+                  </td>
+                  <td style={{
+                    color: pl >= 0 ? 'var(--gain)' : 'var(--loss)',
+                    fontWeight: 700,
+                  }}>
+                    {pl >= 0 ? '+' : ''}₹{parseFloat(pl).toLocaleString('en-IN')}
+                  </td>
+                  <td>
+                    <span className={`badge badge-${
+                      parseFloat(plPct) >= 0 ? 'executed' : 'rejected'}`}>
+                      {parseFloat(plPct) >= 0 ? '+' : ''}{plPct}%
+                    </span>
+                  </td>
+                </tr>
               )
-            }
-          </div>
-        )}
+            })}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+)}
 
         {/* ── Orders tab ── */}
         {activeTab === 'orders' && (
-          <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
-            {orders.length === 0
-              ? <EmptyState message="No orders placed yet." />
-              : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>STOCK</th>
-                      <th>SIDE</th>
-                      <th>TYPE</th>
-                      <th>QTY</th>
-                      <th>LIMIT PRICE</th>
-                      <th>EXEC PRICE</th>
-                      <th>VALUE</th>
-                      <th>STATUS</th>
-                      <th>PLACED</th>
-                      <th>ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(o => (
-                      <tr key={o.id}>
-                        <td style={{ fontWeight: 700,
-                                     color: 'var(--text-primary)',
-                                     letterSpacing: '0.04em' }}>
-                          {o.ticker}
-                        </td>
-                        <td>
-                          <span style={{
-                            color: o.side === 'BUY'
-                              ? 'var(--gain)' : 'var(--loss)',
-                            fontWeight: 700,
-                          }}>
-                            {o.side}
-                          </span>
-                        </td>
-                        <td>{o.type}</td>
-                        <td>{o.quantity}</td>
-                        <td>
-                          {o.limitPrice
-                            ? `₹${parseFloat(o.limitPrice)
-                                   .toLocaleString('en-IN')}`
-                            : '—'}
-                        </td>
-                        <td>
-                          {o.executedPrice
-                            ? `₹${parseFloat(o.executedPrice)
-                                   .toLocaleString('en-IN')}`
-                            : '—'}
-                        </td>
-                        <td>
-                          {o.totalOrderValue
-                            ? `₹${parseFloat(o.totalOrderValue)
-                                   .toLocaleString('en-IN')}`
-                            : '—'}
-                        </td>
-                        <td>
-                          <span className={`badge badge-${
-                            o.status.toLowerCase()}`}>
-                            {o.status}
-                          </span>
-                        </td>
-                        <td style={{ color: 'var(--text-muted)',
-                                     fontSize: 12 }}>
-                          {new Date(o.placedAt)
-                            .toLocaleString('en-IN')}
-                        </td>
-                        <td>
-                          {o.status === 'PENDING' && (
-                            <button
-                              onClick={() => handleCancelOrder(o.id)}
-                              className="btn btn-ghost"
-                              style={{ padding: '4px 10px',
-                                       fontSize: 11 }}
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            }
-          </div>
-        )}
+        <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
+
+    {/* Status filter buttons */}
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      {['ALL', 'PENDING', 'EXECUTED', 'CANCELLED', 'REJECTED'].map(f => (
+        <button
+          key={f}
+          onClick={() => setOrderFilter(f)}
+          className="btn btn-ghost"
+          style={{
+            padding:     '4px 12px',
+            fontSize:    11,
+            fontFamily:  'var(--font-mono)',
+            letterSpacing: '0.06em',
+            color:       orderFilter === f
+              ? 'var(--accent-cyan)' : 'var(--text-muted)',
+            borderColor: orderFilter === f
+              ? 'var(--accent-cyan)' : 'var(--border-primary)',
+          }}
+        >
+          {f}
+        </button>
+      ))}
+    </div>
+
+    {filteredOrders.length === 0
+      ? <EmptyState message="No orders found." />
+      : (
+        <table>
+          <thead>
+            <tr>
+              <th>STOCK</th><th>SIDE</th><th>TYPE</th><th>QTY</th>
+              <th>LIMIT PRICE</th><th>EXEC PRICE</th><th>VALUE</th>
+              <th>STATUS</th><th>PLACED</th><th>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredOrders.map(o => (
+              <tr key={o.id}>
+                <td style={{ fontWeight: 700, color: 'var(--text-primary)',
+                             letterSpacing: '0.04em' }}>
+                  {o.ticker}
+                </td>
+                <td>
+                  <span style={{
+                    color: o.side === 'BUY' ? 'var(--gain)' : 'var(--loss)',
+                    fontWeight: 700,
+                  }}>
+                    {o.side}
+                  </span>
+                </td>
+                <td>{o.type}</td>
+                <td>{o.quantity}</td>
+                <td>{o.limitPrice
+                  ? `₹${parseFloat(o.limitPrice).toLocaleString('en-IN')}` : '—'}
+                </td>
+                <td>{o.executedPrice
+                  ? `₹${parseFloat(o.executedPrice).toLocaleString('en-IN')}` : '—'}
+                </td>
+                <td>{o.totalOrderValue
+                  ? `₹${parseFloat(o.totalOrderValue).toLocaleString('en-IN')}` : '—'}
+                </td>
+                <td>
+                  <span className={`badge badge-${o.status.toLowerCase()}`}>
+                    {o.status}
+                  </span>
+                </td>
+                <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                  {new Date(o.placedAt).toLocaleString('en-IN')}
+                </td>
+                <td>
+                  {o.status === 'PENDING' && (
+                    <button
+                      onClick={() => handleCancelOrder(o.id)}
+                      className="btn btn-ghost"
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+)}
 
         {/* ── Trades tab ── */}
         {activeTab === 'trades' && (

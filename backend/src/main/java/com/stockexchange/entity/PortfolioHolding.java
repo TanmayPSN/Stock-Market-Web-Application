@@ -54,6 +54,12 @@ public class PortfolioHolding {
     // no need to look up trade history every time.
 
     @Column(nullable = false)
+    private boolean marginPosition;
+    // True if this holding was bought using margin.
+    // Used at sell time to decide where proceeds go —
+    // back to balance or back to margin account.
+
+    @Column(nullable = false)
     private LocalDateTime lastUpdatedAt;
     // When this holding was last changed (buy or sell executed).
 }

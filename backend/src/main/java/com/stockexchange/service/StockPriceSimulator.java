@@ -25,6 +25,7 @@ public class StockPriceSimulator {
     private final StockRepository      stockRepository;
     private final StockService         stockService;
     private final OrderService         orderService;
+    private final MarginService        marginService;
     private final MarketHoursService   marketHoursService;
     private final SimpMessagingTemplate messagingTemplate;
     // SimpMessagingTemplate sends messages to WebSocket subscribers.
@@ -60,6 +61,9 @@ public class StockPriceSimulator {
             // Push updated price to all WebSocket subscribers.
             pushPriceUpdate(stock.getTicker(), newPrice);
         });
+
+        // After all prices updated, check margin calls across all users
+        marginService.checkMarginCallsAfterPriceUpdate();
     }
 
     // ── Price Calculation ────────────────────────────────────────────────────

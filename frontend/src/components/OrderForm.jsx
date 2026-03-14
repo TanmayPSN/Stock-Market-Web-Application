@@ -53,7 +53,7 @@ export default function OrderForm({
         quantity:   parseInt(form.quantity),
         limitPrice: form.type === 'LIMIT'
           ? parseFloat(form.limitPrice) : null,
-        useMargin:  form.useMargin,
+        useMargin:  form.side === 'BUY' ? form.useMargin : false,
       }
 
       const res = await api.post('/orders/place', payload)
@@ -206,30 +206,32 @@ export default function OrderForm({
           </div>
         )}
 
-        {/* ── Margin toggle ── */}
-        <label style={s.marginToggle}>
-          <div style={s.marginToggleLeft}>
-            <span style={s.marginToggleLabel}>Use Margin (5x leverage)</span>
-            <span style={s.marginToggleHint}>
-              Trade beyond your available balance
-            </span>
-          </div>
-          <div
-            onClick={() =>
-              setForm(p => ({ ...p, useMargin: !p.useMargin }))}
-            style={{
-              ...s.toggle,
-              background: form.useMargin
-                ? 'var(--accent-cyan)' : 'var(--bg-input)',
-            }}
-          >
-            <div style={{
-              ...s.toggleThumb,
-              transform: form.useMargin
-                ? 'translateX(20px)' : 'translateX(2px)',
-            }} />
-          </div>
-        </label>
+        {/* ── Margin toggle — only show for BUY ── */}
+        {form.side === 'BUY' && (
+          <label style={s.marginToggle}>
+            <div style={s.marginToggleLeft}>
+              <span style={s.marginToggleLabel}>Use Margin (5x leverage)</span>
+              <span style={s.marginToggleHint}>
+                Trade beyond your available balance
+              </span>
+            </div>
+            <div
+              onClick={() =>
+                setForm(p => ({ ...p, useMargin: !p.useMargin }))}
+              style={{
+                ...s.toggle,
+                background: form.useMargin
+                  ? 'var(--accent-cyan)' : 'var(--bg-input)',
+              }}
+            >
+              <div style={{
+                ...s.toggleThumb,
+                transform: form.useMargin
+                  ? 'translateX(20px)' : 'translateX(2px)',
+              }} />
+            </div>
+          </label>
+        )}
 
         {/* ── Estimated cost ── */}
         {estimatedCost && (

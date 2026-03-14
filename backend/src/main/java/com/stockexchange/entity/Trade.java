@@ -21,13 +21,13 @@ public class Trade {
     // Primary key.
 
     @ManyToOne
-    @JoinColumn(name = "buy_order_id", nullable = false)
+    @JoinColumn(name = "buy_order_id", nullable = true)
     private Order buyOrder;
     // The order that was on the BUY side of this trade.
     // Links back to the full order details.
 
     @ManyToOne
-    @JoinColumn(name = "sell_order_id", nullable = false)
+    @JoinColumn(name = "sell_order_id", nullable = true)
     private Order sellOrder;
     // The order that was on the SELL side of this trade.
 
@@ -38,12 +38,12 @@ public class Trade {
     // without joining through orders every time.
 
     @ManyToOne
-    @JoinColumn(name = "buyer_id", nullable = false)
+    @JoinColumn(name = "buyer_id", nullable = true)
     private User buyer;
     // The user who bought. Stored directly for fast "my trade history" queries.
 
     @ManyToOne
-    @JoinColumn(name = "seller_id", nullable = false)
+    @JoinColumn(name = "seller_id", nullable = true)
     private User seller;
     // The user who sold.
 

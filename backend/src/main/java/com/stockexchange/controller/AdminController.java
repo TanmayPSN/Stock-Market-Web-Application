@@ -5,6 +5,7 @@ import com.stockexchange.dto.response.PortfolioResponse;
 import com.stockexchange.dto.response.TradeResponse;
 import com.stockexchange.entity.MarginAccount;
 import com.stockexchange.entity.User;
+import com.stockexchange.enums.Role;
 import com.stockexchange.repository.MarginAccountRepository;
 import com.stockexchange.repository.UserRepository;
 import com.stockexchange.service.OrderService;
@@ -48,23 +49,38 @@ public class AdminController {
     @GetMapping("/users/active")
     public ResponseEntity<List<User>> getActiveUsers() {
         return ResponseEntity.ok(
-                userRepository.findByIsActiveTrue());
+                userRepository.findByActiveTrue());
     }
 
     @GetMapping("/users/inactive")
     public ResponseEntity<List<User>> getInactiveUsers() {
         return ResponseEntity.ok(
-                userRepository.findByIsActiveFalse());
+                userRepository.findByActiveFalse());
     }
 
     @PutMapping("/users/{userId}/deactivate")
     public ResponseEntity<Map<String, String>> deactivateUser(
             @PathVariable Long userId) {
-        // Admin deactivates a user — they can no longer log in
-        // or place orders. Data is preserved.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException(
                         "User not found: " + userId));
+
+        // Prevent deactivating the last active admin
+        if (user.getRole() == Role.ROLE_ADMIN) {
+            long activeAdminCount = userRepository
+                    .findByActiveTrue()  // already fixed to findByActiveTrue()
+                    .stream()
+                    .filter(u -> u.getRole() == Role.ROLE_ADMIN)
+                    .count();
+
+            if (activeAdminCount <= 1) {
+                return ResponseEntity
+                        .badRequest()
+                        .body(Map.of("message",
+                                "Cannot deactivate the last active admin"));
+            }
+        }
+
         user.setActive(false);
         userRepository.save(user);
         return ResponseEntity.ok(Map.of(
@@ -148,7 +164,7 @@ public class AdminController {
     public ResponseEntity<Map<String, Object>> getPlatformSummary() {
         // High-level platform stats shown on the admin dashboard.
         long totalUsers    = userRepository.count();
-        long activeUsers   = userRepository.findByIsActiveTrue().size();
+        long activeUsers   = userRepository.findByActiveTrue().size();
         long totalTrades   = tradeService.getAllTrades().size();
         long marginCalls   = marginAccountRepository
                 .findAllMarginCallAccounts().size();

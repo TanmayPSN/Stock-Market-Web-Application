@@ -28,9 +28,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRole(Role role);
     // Used by AdminController to list all ROLE_USER accounts.
 
-    List<User> findByIsActiveTrue();
+    List<User> findByActiveTrue();
     // Used by AdminController to see all currently active users.
 
-    List<User> findByIsActiveFalse();
+    List<User> findByActiveFalse();
     // Used by AdminController to see all deactivated accounts.
 }
