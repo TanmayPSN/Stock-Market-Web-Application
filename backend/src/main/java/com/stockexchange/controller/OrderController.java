@@ -33,7 +33,7 @@ public class OrderController {
         // Return 200 OK for rejected orders so frontend
         // can read the rejection reason in the body.
         HttpStatus status = switch (response.getStatus()) {
-            case EXECUTED, PENDING -> HttpStatus.CREATED;
+            case EXECUTED, PENDING, PARTIAL -> HttpStatus.CREATED;
             case REJECTED          -> HttpStatus.OK;
             case CANCELLED         -> HttpStatus.OK;
         };
