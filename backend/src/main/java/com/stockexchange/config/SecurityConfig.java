@@ -78,6 +78,9 @@ public class SecurityConfig {
 
                                 // ── Admin only endpoints ──
                                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                                .requestMatchers(HttpMethod.POST,   "/api/stocks/add").hasAuthority("ROLE_ADMIN")
+                                .requestMatchers(HttpMethod.PUT,    "/api/stocks/*/delist").hasAuthority("ROLE_ADMIN")
+                                .requestMatchers(HttpMethod.PUT,    "/api/stocks/initialize-day").hasAuthority("ROLE_ADMIN")
                                 // All /api/admin/** routes require ROLE_ADMIN.
                                 // hasRole("ADMIN") automatically checks for "ROLE_ADMIN".
 

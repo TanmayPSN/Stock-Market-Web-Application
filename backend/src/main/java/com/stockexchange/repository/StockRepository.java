@@ -20,12 +20,12 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     // Used by AdminController when adding a new stock
     // to prevent duplicate tickers.
 
-    List<Stock> findByIsActiveTrue();
+    List<Stock> findByActiveTrue();
     // Returns only listed stocks.
     // Used by StockController for the market dashboard —
     // delisted stocks should not appear.
 
-    List<Stock> findByIsActiveFalse();
+    List<Stock> findByActiveFalse();
     // Used by AdminController to view delisted stocks.
 
     List<Stock> findByCurrentPriceBetween(BigDecimal min, BigDecimal max);

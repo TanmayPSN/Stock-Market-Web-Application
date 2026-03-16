@@ -25,7 +25,7 @@ public class StockService {
     public List<StockResponse> getAllActiveStocks() {
         // Called by StockController for the market dashboard.
         // Returns only active (listed) stocks.
-        return stockRepository.findByIsActiveTrue()
+        return stockRepository.findByActiveTrue()
                 .stream()
                 .map(this::toStockResponse)
                 .toList();
@@ -94,7 +94,7 @@ public class StockService {
     public void initializeDayPrices() {
         // Called at market open to set openPrice = currentPrice
         // and reset high/low for the new trading day.
-        stockRepository.findByIsActiveTrue().forEach(stock -> {
+        stockRepository.findByActiveTrue().forEach(stock -> {
             stock.setOpenPrice(stock.getCurrentPrice());
             stock.setPreviousClosePrice(stock.getCurrentPrice());
             stock.setHighPrice(stock.getCurrentPrice());
@@ -134,7 +134,7 @@ public class StockService {
                 .priceChangePercent(changePercent)
                 .priceDirection(direction)
                 .totalSharesAvailable(stock.getTotalSharesAvailable())
-                .isActive(stock.isActive())
+                .active(stock.isActive())
                 .lastUpdatedAt(stock.getLastUpdatedAt())
                 .build();
     }

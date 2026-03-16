@@ -61,8 +61,8 @@ public class Stock {
     // Total shares available in the exchange for this stock.
     // Decreases when users buy, increases when users sell.
 
-    @Column(nullable = false)
-    private boolean isActive;
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
     // Admin can delist a stock. If false, no orders can be placed on it.
 
     @Column(nullable = false)

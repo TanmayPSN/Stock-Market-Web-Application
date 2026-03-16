@@ -56,7 +56,7 @@ public class StockResponse {
     // Remaining shares that can be bought.
     // Shown on order form so user knows availability.
 
-    private boolean isActive;
+    private boolean active;
     // If false, stock is delisted — order form disables BUY/SELL buttons.
 
     private LocalDateTime lastUpdatedAt;

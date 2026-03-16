@@ -5,7 +5,8 @@ import api from '../api/axios'
 import { useWebSocket } from '../hooks/useWebSocket'
 import {
   TrendingUp, TrendingDown, Wallet,
-  BarChart2, Clock, RefreshCw
+  BarChart2, Clock, RefreshCw,
+  PlusCircle, MinusCircle
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip,
@@ -27,6 +28,14 @@ export default function Portfolio() {
   const [loading,   setLoading]   = useState(true)
   const [activeTab, setActiveTab] = useState('holdings')
   const [refreshing,setRefreshing]= useState(false)
+
+  // ── Balance modal state ──
+  const [balanceModal,   setBalanceModal]   = useState(null)
+  // null | 'add' | 'withdraw'
+  const [balanceAmount,  setBalanceAmount]  = useState('')
+  const [balanceError,   setBalanceError]   = useState('')
+  const [balanceSuccess, setBalanceSuccess] = useState('')
+  const [balanceLoading, setBalanceLoading] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -60,6 +69,40 @@ export default function Portfolio() {
     }
   }
 
+  const handleBalanceAction = async () => {
+    setBalanceError('')
+    setBalanceSuccess('')
+    const amount = parseFloat(balanceAmount)
+    if (isNaN(amount) || amount <= 0) {
+      return setBalanceError('Enter a valid amount greater than 0')
+    }
+
+    setBalanceLoading(true)
+    try {
+      const endpoint = balanceModal === 'add'
+        ? '/user/balance/add'
+        : '/user/balance/withdraw'
+      const res = await api.put(endpoint, { amount })
+
+      // Update available balance in portfolio state immediately
+      setPortfolio(prev => ({
+        ...prev,
+        availableBalance: res.data.newBalance,
+      }))
+      setBalanceSuccess(res.data.message)
+      setBalanceAmount('')
+      setTimeout(() => {
+        setBalanceModal(null)
+        setBalanceSuccess('')
+      }, 1500)
+    } catch (err) {
+      const msg = err.response?.data?.message ?? err.message
+      setBalanceError(msg || 'Failed to update balance')
+    } finally {
+      setBalanceLoading(false)
+    }
+  }
+
   // Enrich holdings with live prices
   const enrichedHoldings = portfolio?.holdings?.map(h => ({
     ...h,
@@ -76,7 +119,7 @@ export default function Portfolio() {
       name:  h.ticker,
       value: parseFloat(h.currentValue.toFixed(2)),
     }))
-  
+
   const filteredHoldings = enrichedHoldings.filter(h =>
     h.ticker.toLowerCase().includes(holdingSearch.toLowerCase()) ||
     h.companyName.toLowerCase().includes(holdingSearch.toLowerCase())
@@ -144,12 +187,51 @@ export default function Portfolio() {
             color="var(--accent-cyan)"
             large
           />
-          <StatCard
-            label="Available Balance"
-            value={`₹${portfolio?.availableBalance?.toLocaleString('en-IN') ?? 0}`}
-            icon={<Wallet size={18} />}
-            color="var(--accent-amber)"
-          />
+
+          {/* Available Balance + Add/Withdraw buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <StatCard
+              label="Available Balance"
+              value={`₹${portfolio?.availableBalance?.toLocaleString('en-IN') ?? 0}`}
+              icon={<Wallet size={18} />}
+              color="var(--accent-amber)"
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => {
+                  setBalanceModal('add')
+                  setBalanceAmount('')
+                  setBalanceError('')
+                  setBalanceSuccess('')
+                }}
+                className="btn btn-ghost"
+                style={{
+                  flex: 1, justifyContent: 'center', fontSize: 11,
+                  color: 'var(--gain)', borderColor: 'var(--gain)',
+                  padding: '6px 8px',
+                }}
+              >
+                <PlusCircle size={12} /> Add Funds
+              </button>
+              <button
+                onClick={() => {
+                  setBalanceModal('withdraw')
+                  setBalanceAmount('')
+                  setBalanceError('')
+                  setBalanceSuccess('')
+                }}
+                className="btn btn-ghost"
+                style={{
+                  flex: 1, justifyContent: 'center', fontSize: 11,
+                  color: 'var(--loss)', borderColor: 'var(--loss)',
+                  padding: '6px 8px',
+                }}
+              >
+                <MinusCircle size={12} /> Withdraw
+              </button>
+            </div>
+          </div>
+
           <StatCard
             label="Invested Value"
             value={`₹${portfolio?.totalInvestedValue?.toLocaleString('en-IN') ?? 0}`}
@@ -283,15 +365,15 @@ export default function Portfolio() {
                 ...(activeTab === tab ? s.tabActive : {})
               }}
             >
-              {tab === 'holdings' && <BarChart2 size={14} />}
-              {tab === 'orders'   && <Clock     size={14} />}
+              {tab === 'holdings' && <BarChart2  size={14} />}
+              {tab === 'orders'   && <Clock      size={14} />}
               {tab === 'trades'   && <TrendingUp size={14} />}
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
               {tab === 'orders' && orders.filter(
                 o => o.status === 'PENDING' || o.status === 'PARTIAL').length > 0 && (
                 <span style={s.tabBadge}>
-                  {orders.filter(o => o.status === 'PENDING'
-                    || o.status === 'PARTIAL').length}
+                  {orders.filter(o =>
+                    o.status === 'PENDING' || o.status === 'PARTIAL').length}
                 </span>
               )}
             </button>
@@ -300,189 +382,189 @@ export default function Portfolio() {
 
         {/* ── Holdings tab ── */}
         {activeTab === 'holdings' && (
-        <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
-
-        {/* Search bar */}
-        <div style={{ marginBottom: 12 }}>
-          <input
-            type="text"
-            placeholder="Search holdings by ticker or company..."
-            value={holdingSearch}
-            onChange={e => setHoldingSearch(e.target.value)}
-            className="input"
-            style={{ width: 300, fontSize: 13, fontFamily: 'var(--font-mono)' }}
-          />
-        </div>
-
-    {filteredHoldings.length === 0
-      ? <EmptyState message={
-          holdingSearch
-            ? `No holdings found for "${holdingSearch}"`
-            : 'No holdings yet. Start trading!'
-        } />
-      : (
-        <table>
-          <thead>
-            <tr>
-              <th>STOCK</th><th>QTY</th><th>AVG BUY</th>
-              <th>CURRENT</th><th>VALUE</th><th>P&L</th><th>P&L %</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredHoldings.map(h => {
-              const pl    = h.profitLoss
-              const plPct = ((pl / h.investedAmount) * 100).toFixed(2)
-              return (
-                <tr key={h.ticker}>
-                  <td>
-                    <div>
-                      <div style={{ fontWeight: 700,
-                                    color: 'var(--text-primary)',
-                                    letterSpacing: '0.04em' }}>
-                        {h.ticker}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {h.companyName}
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {h.quantityOwned}
-                  </td>
-                  <td>₹{parseFloat(h.averageBuyPrice).toLocaleString('en-IN')}</td>
-                  <td style={{
-                    color: h.priceDirection === 'UP' ? 'var(--gain)' : 'var(--loss)',
-                    fontWeight: 600,
-                  }}>
-                    ₹{parseFloat(h.currentPrice).toLocaleString('en-IN')}
-                    <span style={{ fontSize: 10, marginLeft: 4 }}>
-                      {h.priceDirection === 'UP' ? '▲' : '▼'}
-                    </span>
-                  </td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    ₹{parseFloat(h.currentValue).toLocaleString('en-IN')}
-                  </td>
-                  <td style={{
-                    color: pl >= 0 ? 'var(--gain)' : 'var(--loss)',
-                    fontWeight: 700,
-                  }}>
-                    {pl >= 0 ? '+' : ''}₹{parseFloat(pl).toLocaleString('en-IN')}
-                  </td>
-                  <td>
-                    <span className={`badge badge-${
-                      parseFloat(plPct) >= 0 ? 'executed' : 'rejected'}`}>
-                      {parseFloat(plPct) >= 0 ? '+' : ''}{plPct}%
-                    </span>
-                  </td>
-                </tr>
+          <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
+            <div style={{ marginBottom: 12 }}>
+              <input
+                type="text"
+                placeholder="Search holdings by ticker or company..."
+                value={holdingSearch}
+                onChange={e => setHoldingSearch(e.target.value)}
+                className="input"
+                style={{ width: 300, fontSize: 13, fontFamily: 'var(--font-mono)' }}
+              />
+            </div>
+            {filteredHoldings.length === 0
+              ? <EmptyState message={
+                  holdingSearch
+                    ? `No holdings found for "${holdingSearch}"`
+                    : 'No holdings yet. Start trading!'
+                } />
+              : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>STOCK</th><th>QTY</th><th>AVG BUY</th>
+                      <th>CURRENT</th><th>VALUE</th><th>P&L</th><th>P&L %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHoldings.map(h => {
+                      const pl    = h.profitLoss
+                      const plPct = ((pl / h.investedAmount) * 100).toFixed(2)
+                      return (
+                        <tr key={h.ticker}>
+                          <td>
+                            <div>
+                              <div style={{ fontWeight: 700,
+                                            color: 'var(--text-primary)',
+                                            letterSpacing: '0.04em' }}>
+                                {h.ticker}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {h.companyName}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                            {h.quantityOwned}
+                          </td>
+                          <td>₹{parseFloat(h.averageBuyPrice).toLocaleString('en-IN')}</td>
+                          <td style={{
+                            color: h.priceDirection === 'UP'
+                              ? 'var(--gain)' : 'var(--loss)',
+                            fontWeight: 600,
+                          }}>
+                            ₹{parseFloat(h.currentPrice).toLocaleString('en-IN')}
+                            <span style={{ fontSize: 10, marginLeft: 4 }}>
+                              {h.priceDirection === 'UP' ? '▲' : '▼'}
+                            </span>
+                          </td>
+                          <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                            ₹{parseFloat(h.currentValue).toLocaleString('en-IN')}
+                          </td>
+                          <td style={{
+                            color: pl >= 0 ? 'var(--gain)' : 'var(--loss)',
+                            fontWeight: 700,
+                          }}>
+                            {pl >= 0 ? '+' : ''}₹{parseFloat(pl).toLocaleString('en-IN')}
+                          </td>
+                          <td>
+                            <span className={`badge badge-${
+                              parseFloat(plPct) >= 0 ? 'executed' : 'rejected'}`}>
+                              {parseFloat(plPct) >= 0 ? '+' : ''}{plPct}%
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               )
-            })}
-          </tbody>
-        </table>
-      )
-    }
-  </div>
-)}
+            }
+          </div>
+        )}
 
         {/* ── Orders tab ── */}
         {activeTab === 'orders' && (
-        <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
-
-    {/* Status filter buttons */}
-    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-      {['ALL', 'PENDING', 'PARTIAL', 'EXECUTED', 'CANCELLED', 'REJECTED'].map(f => (
-        <button
-          key={f}
-          onClick={() => setOrderFilter(f)}
-          className="btn btn-ghost"
-          style={{
-            padding:     '4px 12px',
-            fontSize:    11,
-            fontFamily:  'var(--font-mono)',
-            letterSpacing: '0.06em',
-            color:       orderFilter === f
-              ? 'var(--accent-cyan)' : 'var(--text-muted)',
-            borderColor: orderFilter === f
-              ? 'var(--accent-cyan)' : 'var(--border-primary)',
-          }}
-        >
-          {f}
-        </button>
-      ))}
-    </div>
-
-    {filteredOrders.length === 0
-      ? <EmptyState message="No orders found." />
-      : (
-        <table>
-          <thead>
-            <tr>
-              <th>STOCK</th><th>SIDE</th><th>TYPE</th><th>QTY</th>
-              <th>FILLED</th><th>LIMIT PRICE</th><th>EXEC PRICE</th><th>VALUE</th>
-              <th>STATUS</th><th>PLACED</th><th>ACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.map(o => (
-              <tr key={o.id}>
-                <td style={{ fontWeight: 700, color: 'var(--text-primary)',
-                             letterSpacing: '0.04em' }}>
-                  {o.ticker}
-                </td>
-                <td>
-                  <span style={{
-                    color: o.side === 'BUY' ? 'var(--gain)' : 'var(--loss)',
-                    fontWeight: 700,
-                  }}>
-                    {o.side}
-                  </span>
-                </td>
-                <td>{o.type}</td>
-                <td>{o.quantity}</td>
-                <td style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize:   12,
-                  color: o.filledQuantity > 0
-                    ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                }}>
-                  {o.filledQuantity ?? 0}/{o.quantity}
-                </td>
-                <td>{o.limitPrice
-                  ? `₹${parseFloat(o.limitPrice).toLocaleString('en-IN')}` : '—'}
-                </td>
-                <td>{o.executedPrice
-                  ? `₹${parseFloat(o.executedPrice).toLocaleString('en-IN')}` : '—'}
-                </td>
-                <td>{o.totalOrderValue
-                  ? `₹${parseFloat(o.totalOrderValue).toLocaleString('en-IN')}` : '—'}
-                </td>
-                <td>
-                  <span className={`badge badge-${o.status.toLowerCase()}`}>
-                    {o.status}
-                  </span>
-                </td>
-                <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                  {new Date(o.placedAt).toLocaleString('en-IN')}
-                </td>
-                <td>
-                  {(o.status === 'PENDING' || o.status === 'PARTIAL') && (
-                    <button
-                      onClick={() => handleCancelOrder(o.id)}
-                      className="btn btn-ghost"
-                      style={{ padding: '4px 10px', fontSize: 11 }}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )
-    }
-  </div>
-)}
+          <div style={s.tableWrapper} className="table-wrapper animate-fadeIn">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {['ALL', 'PENDING', 'PARTIAL', 'EXECUTED', 'CANCELLED', 'REJECTED'].map(f => (
+                <button
+                  key={f}
+                  onClick={() => setOrderFilter(f)}
+                  className="btn btn-ghost"
+                  style={{
+                    padding:     '4px 12px',
+                    fontSize:    11,
+                    fontFamily:  'var(--font-mono)',
+                    letterSpacing: '0.06em',
+                    color:       orderFilter === f
+                      ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    borderColor: orderFilter === f
+                      ? 'var(--accent-cyan)' : 'var(--border-primary)',
+                  }}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            {filteredOrders.length === 0
+              ? <EmptyState message="No orders found." />
+              : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>STOCK</th><th>SIDE</th><th>TYPE</th><th>QTY</th>
+                      <th>FILLED</th><th>LIMIT PRICE</th><th>EXEC PRICE</th>
+                      <th>VALUE</th><th>STATUS</th><th>PLACED</th><th>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map(o => (
+                      <tr key={o.id}>
+                        <td style={{ fontWeight: 700,
+                                     color: 'var(--text-primary)',
+                                     letterSpacing: '0.04em' }}>
+                          {o.ticker}
+                        </td>
+                        <td>
+                          <span style={{
+                            color: o.side === 'BUY'
+                              ? 'var(--gain)' : 'var(--loss)',
+                            fontWeight: 700,
+                          }}>
+                            {o.side}
+                          </span>
+                        </td>
+                        <td>{o.type}</td>
+                        <td>{o.quantity}</td>
+                        <td style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize:   12,
+                          color: o.filledQuantity > 0
+                            ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                        }}>
+                          {o.filledQuantity ?? 0}/{o.quantity}
+                        </td>
+                        <td>{o.limitPrice
+                          ? `₹${parseFloat(o.limitPrice).toLocaleString('en-IN')}`
+                          : '—'}
+                        </td>
+                        <td>{o.executedPrice
+                          ? `₹${parseFloat(o.executedPrice).toLocaleString('en-IN')}`
+                          : '—'}
+                        </td>
+                        <td>{o.totalOrderValue
+                          ? `₹${parseFloat(o.totalOrderValue).toLocaleString('en-IN')}`
+                          : '—'}
+                        </td>
+                        <td>
+                          <span className={`badge badge-${o.status.toLowerCase()}`}>
+                            {o.status}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                          {new Date(o.placedAt).toLocaleString('en-IN')}
+                        </td>
+                        <td>
+                          {(o.status === 'PENDING' || o.status === 'PARTIAL') && (
+                            <button
+                              onClick={() => handleCancelOrder(o.id)}
+                              className="btn btn-ghost"
+                              style={{ padding: '4px 10px', fontSize: 11 }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            }
+          </div>
+        )}
 
         {/* ── Trades tab ── */}
         {activeTab === 'trades' && (
@@ -491,10 +573,94 @@ export default function Portfolio() {
           </div>
         )}
 
-      </div>
-    </div>
+      </div>{/* end s.page */}
+
+      {/* ── Balance Modal ── */}
+      {balanceModal && (
+        <div style={s.modalOverlay} onClick={() => setBalanceModal(null)}>
+          <div style={s.modalCard} onClick={e => e.stopPropagation()}>
+
+            <div style={{ display: 'flex', alignItems: 'center',
+                          gap: 10, marginBottom: 6 }}>
+              {balanceModal === 'add'
+                ? <PlusCircle  size={20} color="var(--gain)" />
+                : <MinusCircle size={20} color="var(--loss)" />}
+              <h3 style={{ ...s.cardTitle, marginBottom: 0 }}>
+                {balanceModal === 'add' ? 'Add Funds' : 'Withdraw Funds'}
+              </h3>
+            </div>
+
+            <p style={{ fontSize: 12, color: 'var(--text-muted)',
+                        fontFamily: 'var(--font-mono)', marginBottom: 20 }}>
+              Current balance: ₹{portfolio?.availableBalance
+                ?.toLocaleString('en-IN')}
+            </p>
+
+            <label style={s.fieldLabel}>AMOUNT (₹)</label>
+            <input
+              type="number"
+              min="1"
+              step="0.01"
+              placeholder="Enter amount..."
+              value={balanceAmount}
+              onChange={e => {
+                setBalanceAmount(e.target.value)
+                setBalanceError('')
+                setBalanceSuccess('')
+              }}
+              className="input"
+              style={{ width: '100%', fontSize: 14,
+                       fontFamily: 'var(--font-mono)', marginTop: 6 }}
+              autoFocus
+            />
+
+            {balanceError && (
+              <div style={s.errorBox}>{balanceError}</div>
+            )}
+            {balanceSuccess && (
+              <div style={s.successBox}>{balanceSuccess}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button
+                onClick={handleBalanceAction}
+                disabled={balanceLoading}
+                className="btn"
+                style={{
+                  flex:           1,
+                  justifyContent: 'center',
+                  background: balanceModal === 'add'
+                    ? 'var(--gain-dim)' : 'var(--loss-dim)',
+                  color:      balanceModal === 'add'
+                    ? 'var(--gain)' : 'var(--loss)',
+                  border:     `1px solid ${balanceModal === 'add'
+                    ? 'var(--gain)' : 'var(--loss)'}`,
+                }}
+              >
+                {balanceLoading
+                  ? 'Processing...'
+                  : balanceModal === 'add'
+                    ? '+ Add Funds'
+                    : '− Withdraw'}
+              </button>
+              <button
+                onClick={() => setBalanceModal(null)}
+                className="btn btn-ghost"
+                style={{ flex: 1, justifyContent: 'center' }}
+              >
+                Cancel
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div> // end s.root
   )
 }
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, icon, color, sub, large }) {
   return (
@@ -507,18 +673,16 @@ function StatCard({ label, value, icon, color, sub, large }) {
           {icon}
         </div>
       </div>
-      <div style={{ ...stc.value, color,
-                    fontSize: large ? 26 : 20 }}>
+      <div style={{ ...stc.value, color, fontSize: large ? 26 : 20 }}>
         {value}
       </div>
       {sub && (
         <div style={{
-          fontSize:   12,
-          fontFamily: 'var(--font-mono)',
-          fontWeight: 700,
+          fontSize:     12,
+          fontFamily:   'var(--font-mono)',
+          fontWeight:   700,
           marginBottom: 4,
-          color: parseFloat(sub) >= 0
-            ? 'var(--gain)' : 'var(--loss)',
+          color: parseFloat(sub) >= 0 ? 'var(--gain)' : 'var(--loss)',
         }}>
           {parseFloat(sub) >= 0 ? '▲' : '▼'}{' '}
           {Math.abs(parseFloat(sub))}%
@@ -557,9 +721,13 @@ const stc = {
 
 function MarginRow({ label, value, color }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between',
-                  alignItems: 'center', padding: '8px 0',
-                  borderBottom: '1px solid var(--border-primary)' }}>
+    <div style={{
+      display:        'flex',
+      justifyContent: 'space-between',
+      alignItems:     'center',
+      padding:        '8px 0',
+      borderBottom:   '1px solid var(--border-primary)',
+    }}>
       <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)',
                      color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)',
@@ -570,9 +738,13 @@ function MarginRow({ label, value, color }) {
 
 function EmptyState({ message }) {
   return (
-    <div style={{ padding: '40px', textAlign: 'center',
-                  color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
-                  fontSize: 13 }}>
+    <div style={{
+      padding:    '40px',
+      textAlign:  'center',
+      color:      'var(--text-muted)',
+      fontFamily: 'var(--font-mono)',
+      fontSize:   13,
+    }}>
       {message}
     </div>
   )
@@ -595,6 +767,8 @@ function PortfolioSkeleton() {
   )
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const s = {
   root:    { minHeight: '100vh', background: 'var(--bg-primary)' },
   page:    { marginLeft: 240, padding: '32px 28px', maxWidth: 1400 },
@@ -604,9 +778,12 @@ const s = {
     alignItems:     'flex-start',
     marginBottom:   24,
   },
-  title:   { fontSize: 28, letterSpacing: '-0.02em', marginBottom: 4 },
-  subtitle:{ fontSize: 13, fontFamily: 'var(--font-mono)',
-             color: 'var(--text-secondary)' },
+  title:    { fontSize: 28, letterSpacing: '-0.02em', marginBottom: 4 },
+  subtitle: {
+    fontSize:   13,
+    fontFamily: 'var(--font-mono)',
+    color:      'var(--text-secondary)',
+  },
   marginCallBanner: {
     display:      'flex',
     alignItems:   'flex-start',
@@ -633,9 +810,9 @@ const s = {
     flexWrap:     'wrap',
   },
   chartCard: {
-    flex:         '2 1 300px',
-    padding:      '24px',
-    position:     'relative',
+    flex:     '2 1 300px',
+    padding:  '24px',
+    position: 'relative',
   },
   cardTitle: {
     fontFamily:    'var(--font-display)',
@@ -645,12 +822,12 @@ const s = {
     marginBottom:  16,
   },
   pieCenter: {
-    position:       'absolute',
-    top:            '50%',
-    left:           '35%',
-    transform:      'translate(-50%, -10%)',
-    textAlign:      'center',
-    pointerEvents:  'none',
+    position:      'absolute',
+    top:           '50%',
+    left:          '35%',
+    transform:     'translate(-50%, -10%)',
+    textAlign:     'center',
+    pointerEvents: 'none',
   },
   pieCenterValue: {
     display:       'block',
@@ -660,10 +837,10 @@ const s = {
     color:         'var(--text-primary)',
   },
   pieCenterLabel: {
-    display:    'block',
-    fontFamily: 'var(--font-mono)',
-    fontSize:   10,
-    color:      'var(--text-muted)',
+    display:       'block',
+    fontFamily:    'var(--font-mono)',
+    fontSize:      10,
+    color:         'var(--text-muted)',
     letterSpacing: '0.06em',
   },
   marginCard:  { flex: '1 1 220px', padding: '24px' },
@@ -687,45 +864,91 @@ const s = {
     textAlign:  'right',
   },
   tabRow: {
-    display:      'flex',
-    gap:          4,
-    marginBottom: 16,
-    borderBottom: '1px solid var(--border-primary)',
+    display:       'flex',
+    gap:           4,
+    marginBottom:  16,
+    borderBottom:  '1px solid var(--border-primary)',
     paddingBottom: 0,
   },
   tab: {
-    display:      'flex',
-    alignItems:   'center',
-    gap:          6,
-    padding:      '10px 18px',
-    background:   'none',
-    border:       'none',
-    borderBottom: '2px solid transparent',
-    cursor:       'pointer',
-    fontFamily:   'var(--font-ui)',
-    fontSize:     13,
-    fontWeight:   700,
-    color:        'var(--text-muted)',
-    letterSpacing:'0.05em',
-    textTransform:'uppercase',
-    transition:   'var(--transition)',
-    marginBottom: '-1px',
+    display:       'flex',
+    alignItems:    'center',
+    gap:           6,
+    padding:       '10px 18px',
+    background:    'none',
+    border:        'none',
+    borderBottom:  '2px solid transparent',
+    cursor:        'pointer',
+    fontFamily:    'var(--font-ui)',
+    fontSize:      13,
+    fontWeight:    700,
+    color:         'var(--text-muted)',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    transition:    'var(--transition)',
+    marginBottom:  '-1px',
   },
   tabActive: {
-    color:       'var(--accent-cyan)',
+    color:             'var(--accent-cyan)',
     borderBottomColor: 'var(--accent-cyan)',
   },
   tabBadge: {
-    background:   'var(--accent-amber)',
-    color:        'var(--bg-primary)',
-    borderRadius: '50%',
-    width:        18,
-    height:       18,
-    display:      'flex',
-    alignItems:   'center',
+    background:     'var(--accent-amber)',
+    color:          'var(--bg-primary)',
+    borderRadius:   '50%',
+    width:          18,
+    height:         18,
+    display:        'flex',
+    alignItems:     'center',
     justifyContent: 'center',
-    fontSize:     10,
-    fontWeight:   700,
+    fontSize:       10,
+    fontWeight:     700,
   },
   tableWrapper: { marginBottom: 40 },
+
+  // ── Modal styles ──
+  modalOverlay: {
+    position:       'fixed',
+    inset:          0,
+    background:     'rgba(0,0,0,0.6)',
+    display:        'flex',
+    alignItems:     'center',
+    justifyContent: 'center',
+    zIndex:         1000,
+  },
+  modalCard: {
+    background:   'var(--bg-card)',
+    border:       '1px solid var(--border-primary)',
+    borderRadius: 'var(--radius-lg)',
+    padding:      '28px',
+    width:        '100%',
+    maxWidth:     '400px',
+  },
+  fieldLabel: {
+    fontSize:      11,
+    fontFamily:    'var(--font-mono)',
+    color:         'var(--text-muted)',
+    letterSpacing: '0.08em',
+    fontWeight:    700,
+  },
+  errorBox: {
+    marginTop:    10,
+    padding:      '8px 12px',
+    background:   'var(--loss-dim)',
+    border:       '1px solid var(--loss)',
+    borderRadius: 'var(--radius-md)',
+    color:        'var(--loss)',
+    fontSize:     12,
+    fontFamily:   'var(--font-mono)',
+  },
+  successBox: {
+    marginTop:    10,
+    padding:      '8px 12px',
+    background:   'var(--gain-dim)',
+    border:       '1px solid var(--gain)',
+    borderRadius: 'var(--radius-md)',
+    color:        'var(--gain)',
+    fontSize:     12,
+    fontFamily:   'var(--font-mono)',
+  },
 }

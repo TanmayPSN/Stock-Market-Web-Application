@@ -48,7 +48,7 @@ public class StockPriceSimulator {
             // Do nothing outside market hours — prices freeze.
         }
 
-        List<Stock> activeStocks = stockRepository.findByIsActiveTrue();
+        List<Stock> activeStocks = stockRepository.findByActiveTrue();
 
         activeStocks.forEach(stock -> {
             BigDecimal newPrice = calculateNewPrice(stock.getCurrentPrice());
